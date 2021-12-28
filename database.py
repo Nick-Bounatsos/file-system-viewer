@@ -2,6 +2,7 @@ import os
 import datetime
 import operator
 import time
+import json
 import numpy as np
 import matplotlib.pyplot as plt
 from tkinter.messagebox import showinfo
@@ -40,7 +41,7 @@ class Database:
     encoding = "utf-8"
     date_format = "%d-%b-%Y"  # Date displayed on screen
     delimiter = ": | :"  # A wierd delimiter so that no random match occurs
-    session_data_path = os.path.join("Data", "session_data.csv")
+    session_data_path = os.path.join("Data", "session_data.json")
     data_path = os.path.join("Data", "data.csv")
 
     def __init__(self, *, output, search_output):
@@ -60,8 +61,8 @@ class Database:
 
     def dump_data(self) -> None:
         """
-        Dumps session data to a .csv as follows:
-            location{delimiter}date{delimiter}total_files{delimiter}total_bytes{delimiter}time
+        Dumps session data to a .json. These are the attributes:
+            location, date, total_files, total_bytes, time
         Dumps data to a .csv as follows:
             bytes{delimiter}path
             ...
@@ -71,21 +72,29 @@ class Database:
             csv_file.write(
                 f"{self.location}{self.delimiter}{self.date}{self.delimiter}{len(self.data)}{self.delimiter}{self.total_bytes}{self.delimiter}{self.time}")
 
+        with open(self.session_data_path, "w", encoding=self.encoding) as fp:
+            json.dump({"location": self.location,
+                       "date": self.date,
+                       "file_count": len(self.data),
+                       "total_bytes": self.total_bytes,
+                       "time": self.time}, fp)
+
         with open(self.data_path, "w", encoding=self.encoding) as csv_file:
             for file in self.data:
                 csv_file.write(f"{file.bytes}{self.delimiter}{file.path}\n")
 
     def parse_data(self) -> None:
-        """Parses data and session data from the .csv files."""
+        """Parses data and session data from their respective files."""
         try:
-            # Parsing previous session info
-            with open(self.session_data_path, "r", encoding=self.encoding) as csv_file:
-                self.location, self.date, _total_files, _total_bytes, _time = csv_file.read().strip("\n").split(
-                    self.delimiter)
-            self.total_files = int(_total_files)
-            self.total_bytes = int(_total_bytes)
+            with open(self.session_data_path, "r", encoding=self.encoding) as fp:
+                session_data = json.load(fp)
+            
+            self.location = session_data["location"]
+            self.date = session_data["date"]
+            self.total_files = session_data["file_count"]
+            self.total_bytes = session_data["total_bytes"]
             self.total_size = self.format_bytes(self.total_bytes)
-            self.time = float(_time)
+            self.time = session_data["time"]
 
             # Parsing previous session data
             with open(self.data_path, "r", encoding=self.encoding) as csv_file:
@@ -96,29 +105,38 @@ class Database:
                     self.data.append(File(path.strip("\n"), np.uint64(bytesize)))
             self.matches = self.data.copy()
 
-        # Errors are handled by creating sample .csv files and calling the method again
-        except FileNotFoundError:  # Creating the .csv files
-            with open(self.session_data_path, "w", encoding=self.encoding) as csv_file:
-                csv_file.write(
-                    f"-{self.delimiter}##-##-####{self.delimiter}0{self.delimiter}0{self.delimiter}0")
-            with open(self.data_path, "w", encoding=self.encoding) as csv_file:
-                csv_file.write(f"0{self.delimiter}No directory selected\n")
+        # Errors are handled by creating sample .json and .csv files and calling the method again
+        except FileNotFoundError:
+            with open(self.session_data_path, "w", encoding="utf-8")as fp:
+                json.dump({"location": "/home/user/select/a/directory",
+                            "date": "dd-mmm-yyyy",
+                            "file_count": 1,
+                            "total_bytes": 0,
+                            "time": 0.00}, fp)
+            with open(self.data_path, "w", encoding=self.encoding) as fp:
+                fp.write(f"0{self.delimiter}No directory selected\n")
             self.parse_data()
 
         except ValueError:  # Not enough values to unpack
-            with open(self.session_data_path, "w", encoding=self.encoding) as csv_file:
-                csv_file.write(
-                    f"-{self.delimiter}##-##-####{self.delimiter}0{self.delimiter}0{self.delimiter}0")
-            with open(self.data_path, "w", encoding=self.encoding) as csv_file:
-                csv_file.write(f"0{self.delimiter}No directory selected\n")
+            with open(self.session_data_path, "w", encoding="utf-8")as fp:
+                json.dump({"location": "/home/user/select/a/directory",
+                            "date": "dd-mmm-yyyy",
+                            "file_count": 1,
+                            "total_bytes": 0,
+                            "time": 0.00}, fp)
+            with open(self.data_path, "w", encoding=self.encoding) as fp:
+                fp.write(f"0{self.delimiter}No directory selected\n")
             self.parse_data()
 
         except IndexError:
-            with open(self.session_data_path, "w", encoding=self.encoding) as csv_file:
-                csv_file.write(
-                    f"-{self.delimiter}##-##-####{self.delimiter}0{self.delimiter}0{self.delimiter}0")
-            with open(self.data_path, "w", encoding=self.encoding) as csv_file:
-                csv_file.write(f"0{self.delimiter}No directory selected\n")
+            with open(self.session_data_path, "w", encoding="utf-8")as fp:
+                json.dump({"location": "/home/user/select/a/directory",
+                            "date": "dd-mmm-yyyy",
+                            "file_count": 1,
+                            "total_bytes": 0,
+                            "time": 0.00}, fp)
+            with open(self.data_path, "w", encoding=self.encoding) as fp:
+                fp.write(f"0{self.delimiter}No directory selected\n")
             self.parse_data()
 
     def gather_data(self, dirpath: str) -> None:
@@ -353,7 +371,7 @@ class Database:
             self.matches = self.data.copy()
 
             self.location = "Exported data"
-            self.date = "##-##-###"
+            self.date = "d?-mm?-yyy?"
             self.total_files = len(self.data)
             self.total_bytes = 0
             self.time = 0
