@@ -7,4 +7,4 @@ Features:
 * Using simple RegEx, case insensitivity while searching
 * The data processed/searched can be plotted at any point!
 * Importing other data is possible (as .csv)
-* Exporting as a human-readable .txt file
+* Exporting as .{txt,csv,xlsx}
