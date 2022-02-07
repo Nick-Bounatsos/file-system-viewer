@@ -1,7 +1,7 @@
 {
-    "location": "/home/user/select/a/directory",
+    "location": "None",
     "date": "dd-mmm-yyyy",
-    "file_count": 1,
+    "file_count": 0,
     "total_bytes": 0,
     "time": 0.00
 }
