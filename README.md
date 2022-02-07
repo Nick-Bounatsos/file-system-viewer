@@ -1,5 +1,5 @@
-# file_system_viewer
-file_system_viewer is a project that gathers data (file size, filepath) from your desktop/laptop.
+# file-system-viewer
+file-system-viewer is a project that gathers data (file size, filepath) from your desktop/laptop.
 Features:
 * Using filters for specific output
 * Sorting the data
