@@ -1,8 +1,8 @@
-import database
-import gui
 import tkinter as tk
 from tkinter.filedialog import askdirectory, askopenfilename
 from tkinter.messagebox import askyesno, showinfo, showwarning
+import database
+import gui
 
 # Constants
 ICON = "database.png"
@@ -27,7 +27,6 @@ def format_process_time(process_time: int) -> str:
 
 def gather_data() -> None:
     """Gathers new data or updates old ones."""
-    global data
     dirpath = askdirectory(title="Select a directory")
     if dirpath:
         data.load_data(dirpath=dirpath)
@@ -35,13 +34,12 @@ def gather_data() -> None:
         size_button.config(text=f"Size ({data.total_size})")
         name_button.config(text=f"Path")
         info_label.config(
-            text=f" Date: {data.date} | Files: {format(data.total_files, ',')} | Process time: {format_process_time(data.time)}")
+            text=f" Date: {data.date} | Files: {data.total_files:,} | Process time: {format_process_time(data.time)}")
     root.title(f"Database - {data.location}")
 
 
 def update_data() -> None:
     """Asks for confirmation, updates old data and reports changes."""
-    global data
     old_file_count = data.total_files
     old_size = data.total_bytes
 
@@ -51,17 +49,17 @@ def update_data() -> None:
         size_button.config(text=f"Size ({data.total_size})")
         name_button.config(text=f"Path")
         info_label.config(
-            text=f" Date: {data.date} | Files: {format(data.total_files, ',')} | Process time: {format_process_time(data.time)}")
+            text=f" Date: {data.date} | Files: {data.total_files:,} | Process time: {format_process_time(data.time)}")
 
         # Inform on data difference
         file_dif = data.total_files - old_file_count
         size_dif = data.total_bytes - old_size
-        file_report = "⬩ "
-        size_report = "⬩ "
+        file_report = "- "
+        size_report = "- "
         if not file_dif and not size_dif:
             showinfo("Update complete!",
                      f"Completed in {data.time}s.\n"
-                     f"⬩ No changes detected")
+                     f"- No changes detected")
         else:
             if file_dif > 0:
                 file_report += f"{file_dif} new files added"
@@ -82,17 +80,17 @@ def update_data() -> None:
                      f"{file_report}\n{size_report}")
 
 
-def load_external_data() -> None:
-    """Loads external data saved in .csv format."""
+def import_data() -> None:
+    """Imports external data saved in .csv format."""
     filepath = askopenfilename(title="Select a CSV file", filetypes=[("CSV Files", "*.csv")])
     if filepath:
         if filepath.endswith(".csv"):
-            if data.load_external_data(filepath):
+            if data.import_data(filepath):
                 showinfo("Load", f"Successfully loaded data from {filepath}")
                 size_button.config(text=f"Size ({data.total_size})")
                 name_button.config(text=f"Path")
                 info_label.config(
-                    text=f" Date: Unknown | Files: {format(data.total_files, ',')} | Process time: Unknown")
+                    text=f" Date: Unknown | Files: {data.total_files:,} | Process time: Unknown")
                 root.title(f"Database - External Data")
                 data.print()
             else:
@@ -158,15 +156,16 @@ data = database.Database(output=text_field, search_output=search_info)
 data.load_data()
 data.print()
 
-menubar = gui.CustomMenuBar(root, (gather_data, update_data, data.export_csv, data.export_txt, load_external_data, data.plot_data))
+menubar = gui.CustomMenuBar(root, (gather_data, update_data, data.export_as, import_data, data.plot_data))
 menubar.display()
 
 # Key binds
 root.bind("<Return>", lambda search_in_database: search())
 root.bind("<Control-g>", lambda gather: gather_data())
 root.bind("<Control-u>", lambda update: update_data())
-root.bind("<Control-l>", lambda load_external: load_external_data())
+root.bind("<Control-i>", lambda import_external: import_data())
 root.bind("<Control-p>", lambda plot: data.plot_data())
+root.bind("<Control-q>", lambda quit: root.quit())
 
 if data.location:
     root.title(f"Database - {data.location}")
@@ -174,7 +173,7 @@ if data.location:
 try:
     size_button.config(text=f"Size ({data.total_size})")
     info_label.config(
-        text=f" Date: {data.date} | Files: {format(data.total_files, ',')} | Process time: {format_process_time(data.time)}")
+        text=f" Date: {data.date} | Files: {data.total_files:,} | Process time: {format_process_time(data.time)}")
     data.print()
 finally:
     root.mainloop()

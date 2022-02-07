@@ -1,48 +1,36 @@
-import os
+from tkinter.messagebox import showinfo
 import datetime
 import operator
-import time
 import json
+import csv
+import time
+import os
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
-from tkinter.messagebox import showinfo
 
 
 class File:
     """Class that holds file data."""
 
-    def __init__(self, path: str, bytes: np.uint64):
-        # Unsigned 64-bit integer. Can save an unreasonably large number, in just 8 bytes
-        # Selected because an unsigned 32-bit can save up to 4gb. And there might be a problem
+    def __init__(self, path: str, bytes: int, size: str):
         self.path = path
-        self.bytes = np.uint64(bytes)
-        self.size = self.format_bytes(self.bytes)
+        self.bytes = bytes
+        self.size = size
 
-    @staticmethod
-    def format_bytes(bytes: int) -> str:
-        """Converts bytes to a readable string format."""
-        TB = 1_099_511_627_776  # 1 << 40 or 2 ** 40
-        GB = 1_073_741_824  # 1 << 30 or 2 ** 30
-        MB = 1_048_576  # 1 << 20 or 2 ** 20
-        KB = 1_024  # 1 << 10 or 2 ** 10
-        if bytes / TB >= 1:
-            return f"{round(bytes / TB, 3)} TB"
-        elif bytes / GB >= 1:
-            return f"{round(bytes / GB, 3)} GB"
-        elif bytes / MB >= 1:
-            return f"{round(bytes / MB, 3)} MB"
-        elif bytes / KB >= 1:
-            return f"{round(bytes / KB, 3)} KB"
-        return f"{round(bytes, 3)} Bytes"
+
+    def as_csv_row(self) -> list:
+        """Returns the data as a csv row [path, bytes] (intended for csv.writer.writerow())"""
+        return [self.path, self.bytes]
 
 
 class Database:
     """Class that contains data and all related methods. Parsing, updating, sorting and more."""
     encoding = "utf-8"
     date_format = "%d-%b-%Y"  # Date displayed on screen
-    delimiter = ": | :"  # A wierd delimiter so that no random match occurs
     session_data_path = os.path.join("Data", "session_data.json")
     data_path = os.path.join("Data", "data.csv")
+
 
     def __init__(self, *, output, search_output):
         """Getting output screens and initializing variables."""
@@ -59,18 +47,48 @@ class Database:
         self.time = 0
         self.sorted = None
 
-    def dump_data(self) -> None:
-        """
-        Dumps session data to a .json. These are the attributes:
-            location, date, total_files, total_bytes, time
-        Dumps data to a .csv as follows:
-            bytes{delimiter}path
-            ...
-        Encoding: "utf-8" by default."""
 
-        with open(self.session_data_path, "w", encoding=self.encoding) as csv_file:
-            csv_file.write(
-                f"{self.location}{self.delimiter}{self.date}{self.delimiter}{len(self.data)}{self.delimiter}{self.total_bytes}{self.delimiter}{self.time}")
+    def save_data_as_csv(self) -> None:
+        """Dumps data to a .csv as: path,bytes
+        Encoding: "utf-8" by default."""
+        
+        with open(self.data_path, "w", encoding=self.encoding) as fp:
+                csv_writer = csv.writer(fp)
+                for file in self.data:
+                    csv_writer.writerow(file.as_csv_row())
+
+
+    def load_data_from_csv(self) -> None:
+        """Parses data from csv format.
+        Handles errors by creating a sample file, and calling the method again."""
+
+        try:
+            error_occured = False
+
+            with open(self.data_path, "r", encoding=self.encoding) as fp:
+                csv_reader = csv.reader(fp)
+                self.data.clear()
+                for row in csv_reader:
+                    bytesize = int(row[1])
+                    self.data.append(File(row[0], bytesize, self.format_bytes(bytesize)))
+        
+        except FileNotFoundError:
+            error_occured = True
+        except ValueError:  # Not enough values to unpack
+            error_occured = True
+        except IndexError:
+            error_occured = True
+
+        if error_occured:
+            with open(self.data_path, "w", encoding=self.encoding) as fp:
+                csv_writer = csv.writer(fp)
+                csv_writer.writerow(["No directory selected", 0])
+            self.load_data_from_csv()
+
+
+    def save_session_data_as_json(self) -> None:
+        """Dumps session data to a .json. These are the attributes:
+        location, date, total_files, total_bytes, time"""
 
         with open(self.session_data_path, "w", encoding=self.encoding) as fp:
             json.dump({"location": self.location,
@@ -79,69 +97,43 @@ class Database:
                        "total_bytes": self.total_bytes,
                        "time": self.time}, fp)
 
-        with open(self.data_path, "w", encoding=self.encoding) as csv_file:
-            for file in self.data:
-                csv_file.write(f"{file.bytes}{self.delimiter}{file.path}\n")
 
-    def parse_data(self) -> None:
-        """Parses data and session data from their respective files."""
+    def load_session_data_from_json(self) -> None:
+        """Parses session data from json format.
+        Handles errors by creating a sample file, and calling the method again."""
+
         try:
+            error_occured = False
+
             with open(self.session_data_path, "r", encoding=self.encoding) as fp:
                 session_data = json.load(fp)
-            
-            self.location = session_data["location"]
-            self.date = session_data["date"]
-            self.total_files = session_data["file_count"]
-            self.total_bytes = session_data["total_bytes"]
-            self.total_size = self.format_bytes(self.total_bytes)
-            self.time = session_data["time"]
-
-            # Parsing previous session data
-            with open(self.data_path, "r", encoding=self.encoding) as csv_file:
-                self.data.clear()
-                lines = csv_file.readlines()
-                for line in lines:
-                    bytesize, path = line.strip("\n").split(self.delimiter)
-                    self.data.append(File(path.strip("\n"), np.uint64(bytesize)))
-            self.matches = self.data.copy()
-
-        # Errors are handled by creating sample .json and .csv files and calling the method again
+                
+                self.location = session_data["location"]
+                self.date = session_data["date"]
+                self.total_files = session_data["file_count"]
+                self.total_bytes = session_data["total_bytes"]
+                self.total_size = self.format_bytes(self.total_bytes)
+                self.time = session_data["time"]
         except FileNotFoundError:
-            with open(self.session_data_path, "w", encoding="utf-8")as fp:
-                json.dump({"location": "/home/user/select/a/directory",
-                            "date": "dd-mmm-yyyy",
-                            "file_count": 1,
-                            "total_bytes": 0,
-                            "time": 0.00}, fp)
-            with open(self.data_path, "w", encoding=self.encoding) as fp:
-                fp.write(f"0{self.delimiter}No directory selected\n")
-            self.parse_data()
-
+            error_occured = True
         except ValueError:  # Not enough values to unpack
-            with open(self.session_data_path, "w", encoding="utf-8")as fp:
-                json.dump({"location": "/home/user/select/a/directory",
-                            "date": "dd-mmm-yyyy",
-                            "file_count": 1,
-                            "total_bytes": 0,
-                            "time": 0.00}, fp)
-            with open(self.data_path, "w", encoding=self.encoding) as fp:
-                fp.write(f"0{self.delimiter}No directory selected\n")
-            self.parse_data()
-
+            error_occured = True
         except IndexError:
+            error_occured = True
+
+        if error_occured:
             with open(self.session_data_path, "w", encoding="utf-8")as fp:
-                json.dump({"location": "/home/user/select/a/directory",
+                json.dump({"location": "None",
                             "date": "dd-mmm-yyyy",
-                            "file_count": 1,
+                            "file_count": 0,
                             "total_bytes": 0,
                             "time": 0.00}, fp)
-            with open(self.data_path, "w", encoding=self.encoding) as fp:
-                fp.write(f"0{self.delimiter}No directory selected\n")
-            self.parse_data()
+            self.load_session_data_from_json()
+
 
     def gather_data(self, dirpath: str) -> None:
-        """Walks the path given to the end and returns data.
-        Ignores FileNotFoundError.
+        """Walks the path given to the end, gathers and loads self.data with new data.
+        Ignores FileNotFoundError and PermissionError.
         Data:
         [ File(), File(), ... ]"""
         self.data.clear()
@@ -150,15 +142,25 @@ class Database:
             for file in files:
                 try:
                     filepath = os.path.join(path, file)
+
+                    # if a comma is found in a pathname, it will mess up the csv delimiter. ignore these paths
+                    if "," in filepath:
+                        continue
+
                     bytesize = os.path.getsize(filepath)
                     self.total_bytes += bytesize
-                    self.data.append(File(filepath, np.uint64(bytesize)))
+                    self.data.append(File(filepath, int(bytesize), self.format_bytes(int(bytesize))))
                 except FileNotFoundError:
-                    pass
+                    continue
+                except PermissionError:
+                    continue
         self.total_size = self.format_bytes(self.total_bytes)
         self.sorted = None
 
-    def load_data(self, dirpath=None):
+
+    def load_data(self, dirpath: str=None):
+        """Load data method, either gathers new data from dirpath and saves them,
+        or loads previous data from their respective files."""
         if dirpath:
             ti = time.perf_counter()
             self.gather_data(dirpath)
@@ -168,10 +170,14 @@ class Database:
             self.date = datetime.datetime.now().strftime(self.date_format)
             self.total_files = len(self.data)
             self.location = dirpath
-            self.dump_data()
+            self.save_session_data_as_json()
+            self.save_data_as_csv()
         else:
-            self.parse_data()
+            self.load_session_data_from_json()
+            self.load_data_from_csv()
+            self.matches = self.data.copy()
         self.sorted = None
+
 
     @staticmethod
     def format_bytes(bytes: int) -> str:
@@ -190,6 +196,7 @@ class Database:
             return f"{round(bytes / KB, 3)} KB"
         return f"{round(bytes, 3)} Bytes"
 
+
     @staticmethod
     def parse_bytes(text: str) -> int:
         """Parses and converts bytes strings into bytes. Returns bytes as integers."""
@@ -204,6 +211,7 @@ class Database:
             return int(float(text[:-2]) * (1 << 40))
         elif text.endswith("bytes") or text.endswith("b") or text.endswith("byte"):
             return int(text.replace("b", "").replace("yte", "").replace("s", ""))
+
 
     def search(self, key: str) -> None:
         """Performs linear search, updates self.matches, their size and calls prints the results."""
@@ -315,6 +323,7 @@ class Database:
 
         self.print()
 
+
     def print(self) -> None:
         """Print all the matches to GUI screen. If search is not active, then print all the data.
         In case of search, print total matches and their size in search_info label.
@@ -330,48 +339,62 @@ class Database:
                 self.search_info.config(text="")
             else:
                 self.search_info.config(
-                    text=f"{format(len(self.matches), ',')} files ({self.format_bytes(self.matches_size)})")
+                    text=f"{len(self.matches):,} files ({self.format_bytes(self.matches_size)})")
         else:
             self.output.clear()
             self.output.write("No files found.")
             self.search_info.config(text="0 files")
 
-    def export_txt(self) -> None:
-        """Export as .txt"""
-        export_path = os.path.join(os.getcwd(), "Exports",
-                                   f"Export {self.location.replace(os.path.sep, '_')} {datetime.datetime.now().strftime('%d-%b-%Y')}.txt")
-        with open(export_path, "w", encoding=self.encoding) as txt_file:
-            txt_file.write(f"{self.date}\nTotal files: {self.total_files}\nTotal size: {self.total_size}\n\n")
-            for file in self.data:
-                txt_file.write(f"{file.size}     {file.path}")
-        showinfo("Export", f"    Exported in Exports as\n{os.path.basename(export_path)}")
 
-    def export_csv(self) -> None:
-        """Exports data to a readable .csv file as follows:
-            bytes{delimiter}path
-            ...
-        Encoding: "utf-8" by default."""
-        export_path = os.path.join(os.getcwd(), "Exports",
-                                   f"Export {self.location.replace(os.path.sep, '_')} {datetime.datetime.now().strftime('%d-%b-%Y')}.csv")
-        with open(export_path, "w", encoding=self.encoding) as csv_file:
-            for file in self.data:
-                csv_file.write(f"{file.bytes}{self.delimiter}{file.path}\n")
-        showinfo("Export", f"    Exported in Exports as\n{os.path.basename(export_path)}")
+    def export_as(self, kind: str) -> None:
+        """Exports the data as <kind>.
+        @kind values: csv text excel"""
 
-    def load_external_data(self, filepath: str) -> bool:
-        """Load data saved in .csv format."""
+        # extensionless name
+        export_path = os.path.join(os.getcwd(), "Exports",
+            f"Export {self.location.replace(os.path.sep, '_')} {datetime.datetime.now().strftime('%d-%b-%Y')}")
+        
+        if kind == "text":
+            export_path += ".txt"
+            with open(export_path, "w", encoding=self.encoding) as txt_file:
+                txt_file.write(f"{self.date}\nTotal files: {self.total_files}\nTotal size: {self.total_size}\n\n")
+                for file in self.data:
+                    txt_file.write(f"{file.size}     {file.path}")
+
+        elif kind == "csv":
+            export_path += ".csv"
+            with open(export_path, "w", encoding=self.encoding) as fp:
+                csv_writer = csv.writer(fp)
+                for file in self.data:
+                    csv_writer.writerow(file.as_csv_row())
+
+        elif kind == "excel":
+            export_path += ".xlsx"
+            # convert the data to a dictionary, and then to a pandas.DataFrame, then export as excel.
+            data_dict = {"path": [], "bytes": []}
+            for file in self.data:
+                data_dict["path"].append(file.path)
+                data_dict["bytes"].append(file.bytes)
+            df = pd.DataFrame(data_dict)
+            df.columns = ["path", "bytes"]
+            df.set_index("path", inplace=True)
+            df.to_excel(export_path)
+
+
+    def import_data(self, filepath: str) -> bool:
+        """Import data saved in .csv format."""
         try:
 
-            with open(filepath, "r", encoding=self.encoding) as csv_file:
+            with open(filepath, "r", encoding=self.encoding) as fp:
+                csv_reader = csv.reader(fp)
                 self.data.clear()
-                lines = csv_file.readlines()
-                for line in lines:
-                    bytesize, path = line.strip("\n").split(self.delimiter)
-                    self.data.append(File(path.strip("\n"), np.uint64(bytesize)))
+                for row in csv_reader:
+                    bytesize = int(row[1])
+                    self.data.append(File(row[0], bytesize, self.format_bytes(bytesize)))
             self.matches = self.data.copy()
 
-            self.location = "Exported data"
-            self.date = "d?-mm?-yyy?"
+            self.location = "Imported data"
+            self.date = "unknown"
             self.total_files = len(self.data)
             self.total_bytes = 0
             self.time = 0
@@ -382,6 +405,7 @@ class Database:
         except ValueError:
             return False
 
+
     def sort_by_name(self, ascending=True) -> None:
         """Sorts matches by name. Ascending by default.
             If the data is already sorted, then it reverses it."""
@@ -390,14 +414,15 @@ class Database:
             if self.sorted == "name/desc":
                 self.matches.reverse()
             else:
-                self.matches.sort(key=operator.attrgetter("path"))
+                self.matches.sort(key=operator.attrgetter("path", "bytes"))
             self.sorted = "name/asc"
         else:
             if self.sorted == "name/asc":
                 self.matches.reverse()
             else:
-                self.matches.sort(key=operator.attrgetter("path"), reverse=True)
+                self.matches.sort(key=operator.attrgetter("path", "bytes"), reverse=True)
             self.sorted = "name/desc"
+
 
     def sort_by_size(self, ascending=True) -> None:
         """Sorts matches by size. Ascending by default.
@@ -406,29 +431,36 @@ class Database:
             if self.sorted == "size/desc":
                 self.matches.reverse()
             else:
-                self.matches.sort(key=operator.attrgetter("bytes"))
+                self.matches.sort(key=operator.attrgetter("bytes", "path"))
             self.sorted = "size/asc"
         else:
             if self.sorted == "size/asc":
                 self.matches.reverse()
             else:
-                self.matches.sort(key=operator.attrgetter("bytes"), reverse=True)
+                self.matches.sort(key=operator.attrgetter("bytes", "path"), reverse=True)
             self.sorted = "size/desc"
+
 
     def plot_data(self):
         """Plots file size in mb from self.matches."""
         MB = 1 << 20
         y_axis = [np.float32(file.bytes / MB) for file in self.matches]
+        if len(y_axis) < 2: # Plotting just one value is obsolete and raises a DivisionByZeroError
+            return
+        plt.style.use("seaborn")
         plt.plot(y_axis, color="black")
-        y_axis_mean = sum(y_axis) / len(y_axis)
-        plt.plot([x for x in range(len(y_axis) + 1)], [y_axis_mean for y in range(len(y_axis) + 1)], color="red",
-                 label=f"Mean Size: {round(y_axis_mean, 3)} MB")
+        y_axis_mean = round(np.mean(y_axis), 3)
+        cartesian_field = np.arange(len(y_axis) + 1)
+        plt.plot([x for x in cartesian_field], [y_axis_mean for y in cartesian_field], color="red",
+                 label=f"Mean Size: {y_axis_mean} MB")
         plt.title(f"Search Results Size Distribution")
         plt.xlabel("Files")
         plt.ylabel("Mega bytes")
         plt.xlim(0, len(y_axis))
-        plt.xticks(np.arange(0, len(y_axis), len(y_axis) // 4))
+        x_ticks_step = len(y_axis) // 4 or 1 # if less than 4 are selected, DivisionByZeroError occurs
+        plt.xticks(np.arange(0, len(y_axis), x_ticks_step))
         plt.ylim(0, max(y_axis) * 1.1)
-        plt.yticks(np.arange(min(y_axis), max(y_axis) + 0.1, max(y_axis) / 15))
+        plt.yticks(np.arange(min(y_axis), max(y_axis) + 0.1, round(max(y_axis) / 15, 3)))
         plt.legend()
+        plt.tight_layout()
         plt.show()
