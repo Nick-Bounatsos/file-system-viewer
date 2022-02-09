@@ -1,4 +1,3 @@
-from tkinter.messagebox import showinfo
 import datetime
 import operator
 import json
@@ -328,8 +327,9 @@ class Database:
         """Print all the matches to GUI screen. If search is not active, then print all the data.
         In case of search, print total matches and their size in search_info label.
         Takes care of displaying data on screen."""
+        
+        self.output.clear()
         if self.matches:
-            self.output.clear()
             result = ""
             for file in self.matches:
                 result += f"{file.size:>12}        {file.path}\n"
@@ -341,7 +341,6 @@ class Database:
                 self.search_info.config(
                     text=f"{len(self.matches):,} files ({self.format_bytes(self.matches_size)})")
         else:
-            self.output.clear()
             self.output.write("No files found.")
             self.search_info.config(text="0 files")
 
@@ -352,7 +351,7 @@ class Database:
 
         # extensionless name
         export_path = os.path.join(os.getcwd(), "Exports",
-            f"Export {self.location.replace(os.path.sep, '_')} {datetime.datetime.now().strftime('%d-%b-%Y')}")
+            f"Export {self.location.replace(os.path.sep, '_')}_{datetime.datetime.now().strftime('%d-%b-%Y')}")
         
         if kind == "text":
             export_path += ".txt"
@@ -371,14 +370,25 @@ class Database:
         elif kind == "excel":
             export_path += ".xlsx"
             # convert the data to a dictionary, and then to a pandas.DataFrame, then export as excel.
-            data_dict = {"path": [], "bytes": []}
+            excel_data_dict = {"path": [], "bytes": [], "size": []}
             for file in self.data:
-                data_dict["path"].append(file.path)
-                data_dict["bytes"].append(file.bytes)
-            df = pd.DataFrame(data_dict)
-            df.columns = ["path", "bytes"]
-            df.set_index("path", inplace=True)
+                excel_data_dict["path"].append(file.path)
+                excel_data_dict["bytes"].append(file.bytes)
+                excel_data_dict["size"].append(file.size)
+
+            df = pd.DataFrame(excel_data_dict)
+            df.columns = ["Path", "Bytes", "Size"]
+            df.set_index("Path", inplace=True)
             df.to_excel(export_path)
+        
+        elif kind == "json":
+            export_path += ".json"
+            # dictionary with a single key named data
+            json_data_dict = {"data": []}
+            for file in self.data:
+                json_data_dict["data"].append([file.path, file.bytes, file.size])
+            with open(export_path, "w", encoding=self.encoding) as fp:
+                json.dump(json_data_dict, fp, indent=4)
 
 
     def import_data(self, filepath: str) -> bool:

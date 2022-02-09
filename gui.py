@@ -158,9 +158,10 @@ class CustomMenuBar(tk.Menu):
         self.exportmenu = tk.Menu(self.filemenu, tearoff=0, bg=self.DARK_INKWELL, fg=self.SAND_DOLLAR,
                                   font=self.FONT, activebackground=self.INKWELL, activeforeground=self.SAND_DOLLAR)
         self.filemenu.add_cascade(label="Export As...", menu=self.exportmenu)
-        self.exportmenu.add_command(label="csv", command=lambda csv_export: self.export_csv("csv"))
-        self.exportmenu.add_command(label="text", command=lambda text_export: self.export_txt("text"))
-        self.exportmenu.add_command(label="Excel file", command=lambda excel_export: self.export_excel("excel"))
+        self.exportmenu.add_command(label="text", command=lambda: self.export_as("text"))
+        self.exportmenu.add_command(label="csv", command=lambda: self.export_as("csv"))
+        self.exportmenu.add_command(label="Excel file", command=lambda: self.export_as("excel"))
+        self.exportmenu.add_command(label="json", command=lambda: self.export_as("json"))
         self.filemenu.add_command(label="Import...               Ctrl + I", command=self.import_data)
         self.filemenu.add_separator()
         self.filemenu.add_command(label="Exit                  Ctrl + Q", command=self.parent.quit)
