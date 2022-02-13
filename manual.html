@@ -4,9 +4,14 @@
         <meta charset="UTF-8">
         <title>Database</title>
         <link rel="shortcut icon" type="image/x-icon" href="database.png" />
+        <style> table, th, td {
+            border: 2px solid black;
+            border-collapse: collapse;
+          }
+        </style>
     </head>
     <body bgcolor="#dfcfbe">
-    <h1>General Manual</h1>
+    <h1 >General Manual</h1>
 
     <h2><i>Database</i></h2>
     <p>Database gathers file data from your system and displays them on screen</p>
@@ -15,29 +20,82 @@
         <h3><b>Functions:</b></h3>
         <p>
             <b>Gather Data (Ctrl + G):</b> Gather Data from the directory specified<br>
-            <b>Update Data (Ctrl + U):</b> Re-gathers data from the current directory<br>
-            <b>Import Data (Ctrl + I):</b> Loads data from the .json file selected<br>
-            <b>Plot Data (Ctrl + P):</b> Plots the data processed or searched<br>
-            <b>Export As...:</b> Exports data as .csv/.txt/.xlsx file<br>
+            <b>Update Data (Ctrl + U):</b> Re-gather data from the current directory<br>
+            <b>Import Data (Ctrl + I):</b> Import data from an external .csv file<br>
+            <b>Plot Data (Ctrl + P):</b> Plot the data processed or searched<br>
+            <b>Export As...:</b> Export data as .csv/.txt/.xlsx/.json file<br>
             <b>Sorting:</b> Clicking on the respective data button sorts the data displayed<br>
         </p>
     </div>
 
-    <div id="searching">
+    <!-- <div id="searching">
         <h3><b>Searching:</b></h3>
         <p>
         <b>Operators</b><br>
             > < = {key} (eg. kb, bytes, GB etc)<br>
         <b>RegEx (Name search):</b><br>
             ^{key} → Starts with key<br>
-            ${key} → Ends with key<br>
+            {key}$ → Ends with key<br>
             %{key}% → Caseless<br>
             !{key} → Not in name<br>
             basename: {key}<br>
         <b>Dual search:</b> &&<br>
         </p>
+    </div> -->
+
+    <div id="searching">
+        
+        <h3><b>Searching:</b></h3>
+
+        <table>
+            <tr>
+                <th><b>Operators</b></th>
+                <th><b>Info</b></th>
+            </tr>
+    
+            <tr>
+              <td> => > < <=<i>key</i></td>
+              <td>eg. <=20mb</td>
+            </tr>
+    
+            <tr>
+                <th colspan="2"><b>RegEx</b></th>
+            </tr>
+    
+            <tr>
+              <td>^<i>key</i></td>
+              <td>Starts with key</td>
+            </tr>
+    
+            <tr>
+                <td><i>key</i>$</td>
+                <td>Ends with key</td>
+            </tr>
+    
+            <tr>
+                <td>%<i>key</i>%</td>
+                <td>Case insensitive search</td>
+            </tr>
+    
+            <tr>
+                <td>!<i>key</i></td>
+                <td>Not in name</td>
+            </tr>
+    
+            <tr>
+                <td>basename: <i>key</i></td>
+                <td>Looks for matches only each basename</td>
+            </tr>
+    
+            <tr>
+                <td><i>key</i> && <i>key</i></td>
+                <td>Dual search</td>
+            </tr>
+    
+          </table>
     </div>
 
     <a href="https://github.com/Nick-Bounatsos/file-system-viewer">Visit GitHub repo</a>
+
     </body>
     </html>
