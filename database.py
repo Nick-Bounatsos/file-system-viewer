@@ -452,25 +452,26 @@ class Database:
 
 
     def plot_data(self):
-        """Plots file size in mb from self.matches."""
-        MB = 1 << 20
-        y_axis = [np.float32(file.bytes / MB) for file in self.matches]
-        if len(y_axis) < 2: # Plotting just one value is obsolete and raises a DivisionByZeroError
+        """Scatter plots bytes of each file in self.matches. Logarithmic y-scale."""
+        if len(self.matches) < 2: # Plotting just one value is obsolete and raises a DivisionByZeroError
             return
-        plt.style.use("seaborn")
-        plt.plot(y_axis, color="black")
-        y_axis_mean = round(np.mean(y_axis), 3)
-        cartesian_field = np.arange(len(y_axis) + 1)
-        plt.plot([x for x in cartesian_field], [y_axis_mean for y in cartesian_field], color="red",
-                 label=f"Mean Size: {y_axis_mean} MB")
-        plt.title(f"Search Results Size Distribution")
-        plt.xlabel("Files")
-        plt.ylabel("Mega bytes")
-        plt.xlim(0, len(y_axis))
-        x_ticks_step = len(y_axis) // 4 or 1 # if less than 4 are selected, DivisionByZeroError occurs
-        plt.xticks(np.arange(0, len(y_axis), x_ticks_step))
-        plt.ylim(0, max(y_axis) * 1.1)
-        plt.yticks(np.arange(min(y_axis), max(y_axis) + 0.1, round(max(y_axis) / 15, 3)))
+        
+        x_axis = np.arange(len(self.matches))
+        y_axis = [np.float32(file.bytes) for file in self.matches]
+        
+        plt.style.use("ggplot")
+        
+        plt.scatter(x_axis, y_axis, s=2, color="royalblue",edgecolor="black")
+        y_mean = np.mean(y_axis)
+        y_median = np.median(y_axis)
+        plt.plot(x_axis, np.full_like(x_axis, y_mean), color="red",
+                label=f"Mean = {self.format_bytes(y_mean)}", linewidth=1)
+        plt.plot(x_axis, np.full_like(x_axis, y_median), color="green",
+                label=f"Median = {self.format_bytes(y_median)}", linewidth=1)
+        plt.yscale("log")
+        plt.title("Search Results")
+        plt.xlabel("File")
+        plt.ylabel("Bytes")
         plt.legend()
         plt.tight_layout()
         plt.show()

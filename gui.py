@@ -153,7 +153,7 @@ class CustomMenuBar(tk.Menu):
         self.filemenu.add_command(label="Gather Data           Ctrl + G", command=self.gather_data)
         self.filemenu.add_command(label="Update Data           Ctrl + U", command=self.update_data)
         self.filemenu.add_separator()
-        self.filemenu.add_command(label="Plot Search Results   Ctrl + P", command=self.plot_data)
+        self.filemenu.add_command(label="Scatter Plot Search Results   Ctrl + P", command=self.plot_data)
         self.filemenu.add_separator()
         self.exportmenu = tk.Menu(self.filemenu, tearoff=0, bg=self.DARK_INKWELL, fg=self.SAND_DOLLAR,
                                   font=self.FONT, activebackground=self.INKWELL, activeforeground=self.SAND_DOLLAR)
