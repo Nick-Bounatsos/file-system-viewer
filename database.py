@@ -1,8 +1,8 @@
 import datetime
+import time
 import operator
 import json
 import csv
-import time
 import os
 import numpy as np
 import pandas as pd
@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 
 
 class File:
-    """Class that holds file data."""
+    """Class that holds each file data."""
 
     def __init__(self, path: str, bytes: int, size: str):
         self.path = path
@@ -24,26 +24,35 @@ class File:
 
 
 class Database:
-    """Class that contains data and all related methods. Parsing, updating, sorting and more."""
+    """Class that behaves like a database.
+    Holds the data. Saves them, loads them, gathers new ones, sorts them, searches in them,
+    plots them, imports external ones.
+    The data is saved in a list, as File objects, and when asked, a list of matches is returned.
+    The data itself doesn't change in the database, a copy is saved in self.matches
+    This copy is then being sorted or searched within.
+    Apart from the data, some metadata is also saved (location, total bytes/size, process time)
+    Default encoding: utf-8
+    """
     encoding = "utf-8"
-    date_format = "%d-%b-%Y"  # Date displayed on screen
-    session_data_path = os.path.join("Data", "session_data.json")
+    date_format = "%d-%b-%Y"
+    metadata_path = os.path.join("Data", "metadata.json")
     data_path = os.path.join("Data", "data.csv")
 
 
-    def __init__(self, *, output, search_output):
-        """Getting output screens and initializing variables."""
-        self.output = output
-        self.search_info = search_output
-        self.matches_size = 0
+    def __init__(self) -> None:
+
+        # metadata
         self.location = ""
         self.date = ""
+        self.time = ""
         self.total_files = 0
         self.total_bytes = 0
+
+        # data and data related variables
         self.total_size = ""
-        self.data = []
-        self.matches = []
-        self.time = 0
+        self.data = () # data is saved here as a tuple, and never touched again, only accessed
+        self.matches = [] # this is a list of the data, and it's the one being processed (sorted, searched)
+        self.matches_bytes = 0
         self.sorted = None
 
 
@@ -66,11 +75,12 @@ class Database:
 
             with open(self.data_path, "r", encoding=self.encoding) as fp:
                 csv_reader = csv.reader(fp)
-                self.data.clear()
+                self.matches.clear()
                 for row in csv_reader:
                     bytesize = int(row[1])
-                    self.data.append(File(row[0], bytesize, self.format_bytes(bytesize)))
-        
+                    self.matches.append(File(row[0], bytesize, self.format_bytes(bytesize)))
+            self.data = tuple(self.matches)
+
         except FileNotFoundError:
             error_occured = True
         except ValueError:  # Not enough values to unpack
@@ -85,34 +95,34 @@ class Database:
             self.load_data_from_csv()
 
 
-    def save_session_data_as_json(self) -> None:
-        """Dumps session data to a .json. These are the attributes:
+    def save_metadata_as_json(self) -> None:
+        """Dumps metadata to a .json. These are the attributes:
         location, date, total_files, total_bytes, time"""
 
-        with open(self.session_data_path, "w", encoding=self.encoding) as fp:
+        with open(self.metadata_path, "w", encoding=self.encoding) as fp:
             json.dump({"location": self.location,
                        "date": self.date,
-                       "file_count": len(self.data),
-                       "total_bytes": self.total_bytes,
-                       "time": self.time}, fp)
+                       "time": self.time,
+                       "total_files": len(self.data),
+                       "total_bytes": self.total_bytes}, fp)
 
 
-    def load_session_data_from_json(self) -> None:
-        """Parses session data from json format.
+    def load_metadata_from_json(self) -> None:
+        """Parses metadata from json format.
         Handles errors by creating a sample file, and calling the method again."""
 
         try:
             error_occured = False
 
-            with open(self.session_data_path, "r", encoding=self.encoding) as fp:
-                session_data = json.load(fp)
+            with open(self.metadata_path, "r", encoding=self.encoding) as fp:
+                metadata = json.load(fp)
                 
-                self.location = session_data["location"]
-                self.date = session_data["date"]
-                self.total_files = session_data["file_count"]
-                self.total_bytes = session_data["total_bytes"]
+                self.location = metadata["location"]
+                self.date = metadata["date"]
+                self.total_files = metadata["total_files"]
+                self.total_bytes = self.matches_bytes = metadata["total_bytes"]
                 self.total_size = self.format_bytes(self.total_bytes)
-                self.time = session_data["time"]
+                self.time = metadata["time"]
         except FileNotFoundError:
             error_occured = True
         except ValueError:  # Not enough values to unpack
@@ -121,61 +131,74 @@ class Database:
             error_occured = True
 
         if error_occured:
-            with open(self.session_data_path, "w", encoding="utf-8")as fp:
+            with open(self.metadata_path, "w", encoding="utf-8")as fp:
                 json.dump({"location": "None",
                             "date": "dd-mmm-yyyy",
-                            "file_count": 0,
-                            "total_bytes": 0,
-                            "time": 0.00}, fp)
-            self.load_session_data_from_json()
+                            "time": "0.00",
+                            "total_files": 0,
+                            "total_bytes": 0}, fp)
+            self.load_metadata_from_json()
 
 
     def gather_data(self, dirpath: str) -> None:
-        """Walks the path given to the end, gathers and loads self.data with new data.
+        """Walks the path given to the end, gathers and loads self.matches with new data.
+        When the process ends, casts the self.matches to tuple (self.data)
+        Gathers new metadata and saves all of them.
         Ignores FileNotFoundError and PermissionError.
-        Data:
-        [ File(), File(), ... ]"""
-        self.data.clear()
+        Final data saved as:
+        ( File(), File(), ... )"""
+
+        def format_process_time(process_time: int) -> str:
+            """self.time is formatted and saved as a string."""
+            m, s = divmod(process_time, 60)
+            s = round(s, 2)
+            return f"{s} s" if not m else f"{int(m)}m {s}s"
+        
+        self.matches.clear()
         self.total_bytes = 0
+        self.sorted = None
+
+        # Gather new data
+        ti = time.perf_counter()
         for path, dirs, files in os.walk(dirpath):
             for file in files:
                 try:
                     filepath = os.path.join(path, file)
 
+                    # TODO: files with, are currently ignored. Include them
                     # if a comma is found in a pathname, it will mess up the csv delimiter. ignore these paths
                     if "," in filepath:
                         continue
 
                     bytesize = os.path.getsize(filepath)
                     self.total_bytes += bytesize
-                    self.data.append(File(filepath, int(bytesize), self.format_bytes(int(bytesize))))
+                    self.matches.append(File(filepath, int(bytesize), self.format_bytes(int(bytesize))))
                 except FileNotFoundError:
                     continue
                 except PermissionError:
                     continue
+        self.data = tuple(self.matches)
+        final_time = round(time.perf_counter() - ti, 2)
+        
+        # Gather metadata
+        self.matches_bytes = self.total_bytes
+        self.location = dirpath
+        self.date = datetime.datetime.now().strftime(self.date_format)
+        self.time = format_process_time(final_time)
+        self.total_files = len(self.data)
         self.total_size = self.format_bytes(self.total_bytes)
-        self.sorted = None
+
+        self.save_metadata_as_json()
+        self.save_data_as_csv()
 
 
-    def load_data(self, dirpath: str=None):
-        """Load data method, either gathers new data from dirpath and saves them,
-        or loads previous data from their respective files."""
-        if dirpath:
-            ti = time.perf_counter()
-            self.gather_data(dirpath)
-            # Matches are the active data that is processed, helps sort while searching
-            self.matches = self.data.copy()
-            self.time = round(time.perf_counter() - ti, 2)
-            self.date = datetime.datetime.now().strftime(self.date_format)
-            self.total_files = len(self.data)
-            self.location = dirpath
-            self.save_session_data_as_json()
-            self.save_data_as_csv()
-        else:
-            self.load_session_data_from_json()
-            self.load_data_from_csv()
-            self.matches = self.data.copy()
-        self.sorted = None
+    def load_data(self) -> bool:
+        """Attempts to load previous data."""
+        
+        self.load_metadata_from_json()
+        self.load_data_from_csv()
+
+        return bool(self.matches)
 
 
     @staticmethod
@@ -186,19 +209,20 @@ class Database:
         MB = 1_048_576  # 1 << 20 or 2 ** 20
         KB = 1_024  # 1 << 10 or 2 ** 10
         if bytes / TB >= 1:
-            return f"{round(bytes / TB, 3)} TB"
+            return f"{round(bytes / TB, 3):.3f} TB"
         elif bytes / GB >= 1:
-            return f"{round(bytes / GB, 3)} GB"
+            return f"{round(bytes / GB, 3):.3f} GB"
         elif bytes / MB >= 1:
-            return f"{round(bytes / MB, 3)} MB"
+            return f"{round(bytes / MB, 3):.3f} MB"
         elif bytes / KB >= 1:
-            return f"{round(bytes / KB, 3)} KB"
-        return f"{round(bytes, 3)} Bytes"
+            return f"{round(bytes / KB, 3):.3f} KB"
+        return f"{bytes} Bytes"
 
 
     @staticmethod
     def parse_bytes(text: str) -> int:
-        """Parses and converts bytes strings into bytes. Returns bytes as integers."""
+        """Parses and converts bytes strings into bytes. Returns bytes as integers.
+        This function is used to covert human readable bytes from the search bar, into bytes."""
         text = text.lower().replace(" ", "")
         if text.endswith("kb"):
             return int(float(text[:-2]) * 1024)
@@ -213,14 +237,12 @@ class Database:
 
 
     def search(self, key: str) -> None:
-        """Performs linear search, updates self.matches, their size and calls prints the results."""
+        """Performs linear search, updates self.matches and their size."""
         self.sorted = None
         if not key:
-            self.matches = self.data.copy()
-            self.print()
+            self.matches = list(self.data)
+            self.matches_bytes = self.total_bytes
             return
-        # Clear the screen, to fill with matches
-        self.output.clear()
 
         n = self.total_files - 1
         self.matches.clear()
@@ -267,13 +289,12 @@ class Database:
         # Full search
         else:
             self.matches = [self.data[i] for i in range(n)
-                            if key in self.data[i].path
-                            or key in self.data[i].size]
+            if key in self.data[i].path or key in self.data[i].size]
 
         # Key #2 search:
         if key2:
             n = len(self.matches)
-            prev_matches = list(self.matches.copy())
+            prev_matches = self.matches.copy()
             self.matches.clear()
             # Filtered size search
             if key2.startswith(">"):
@@ -312,42 +333,17 @@ class Database:
             # Full search
             else:
                 self.matches = [prev_matches[i] for i in range(n)
-                                if key2 in prev_matches[i].path
-                                or key2 in prev_matches[i].size]
+                if key2 in prev_matches[i].path or key2 in prev_matches[i].size]
 
         # Calculate the size of matches in bytes
-        self.matches_size = 0
+        self.matches_bytes = 0
         for match in self.matches:
-            self.matches_size += match.bytes
-
-        self.print()
-
-
-    def print(self) -> None:
-        """Print all the matches to GUI screen. If search is not active, then print all the data.
-        In case of search, print total matches and their size in search_info label.
-        Takes care of displaying data on screen."""
-        
-        self.output.clear()
-        if self.matches:
-            result = ""
-            for file in self.matches:
-                result += f"{file.size:>12}        {file.path}\n"
-            self.output.write(result)
-            # Updating search_info. If the whole database is displayed, then don't display match count
-            if len(self.matches) == self.total_files:
-                self.search_info.config(text="")
-            else:
-                self.search_info.config(
-                    text=f"{len(self.matches):,} files ({self.format_bytes(self.matches_size)})")
-        else:
-            self.output.write("No files found.")
-            self.search_info.config(text="0 files")
+            self.matches_bytes += match.bytes
 
 
     def export_as(self, kind: str) -> None:
         """Exports the data as <kind>.
-        @kind values: csv text excel"""
+        @kind values: csv text excel json"""
 
         # extensionless name
         export_path = os.path.join(os.getcwd(), "Exports",
@@ -358,7 +354,7 @@ class Database:
             with open(export_path, "w", encoding=self.encoding) as txt_file:
                 txt_file.write(f"{self.date}\nTotal files: {self.total_files}\nTotal size: {self.total_size}\n\n")
                 for file in self.data:
-                    txt_file.write(f"{file.size}     {file.path}")
+                    txt_file.write(f"{file.size}{' ' * 8}{file.path}\n")
 
         elif kind == "csv":
             export_path += ".csv"
@@ -392,22 +388,25 @@ class Database:
 
 
     def import_data(self, filepath: str) -> bool:
-        """Import data saved in .csv format."""
+        """Import data saved in .csv format. Returns True/False depending on the success of the process."""
         try:
 
             with open(filepath, "r", encoding=self.encoding) as fp:
                 csv_reader = csv.reader(fp)
-                self.data.clear()
+                self.matches.clear()
+                self.total_bytes = 0
                 for row in csv_reader:
                     bytesize = int(row[1])
-                    self.data.append(File(row[0], bytesize, self.format_bytes(bytesize)))
-            self.matches = self.data.copy()
+                    self.total_bytes += bytesize
+                    self.matches.append(File(row[0], bytesize, self.format_bytes(bytesize)))
 
+            self.data = tuple(self.matches)
+            self.matches_bytes = self.total_bytes
+            self.total_size = self.format_bytes(self.total_bytes)
             self.location = "Imported data"
             self.date = "unknown"
             self.total_files = len(self.data)
-            self.total_bytes = 0
-            self.time = 0
+            self.time = "-"
             self.sorted = None
             return True
         except FileNotFoundError:
@@ -416,39 +415,34 @@ class Database:
             return False
 
 
-    def sort_by_name(self, ascending=True) -> None:
-        """Sorts matches by name. Ascending by default.
-            If the data is already sorted, then it reverses it."""
+    def sort_by_size(self) -> None:
+        """Sorts matches by size. If matches aren't sorted, sorts ascending first, otherwise descending.
+        If the data is already sorted, then it reverses it."""
 
-        if ascending:
-            if self.sorted == "name/desc":
-                self.matches.reverse()
-            else:
-                self.matches.sort(key=operator.attrgetter("path", "bytes"))
-            self.sorted = "name/asc"
+        if self.sorted == "size/asc":
+            self.matches.reverse()
+            self.sorted = "size/desc"
         else:
-            if self.sorted == "name/asc":
-                self.matches.reverse()
-            else:
-                self.matches.sort(key=operator.attrgetter("path", "bytes"), reverse=True)
-            self.sorted = "name/desc"
-
-
-    def sort_by_size(self, ascending=True) -> None:
-        """Sorts matches by size. Ascending by default.
-            If the data is already sorted, then it reverses it."""
-        if ascending:
             if self.sorted == "size/desc":
                 self.matches.reverse()
             else:
                 self.matches.sort(key=operator.attrgetter("bytes", "path"))
             self.sorted = "size/asc"
+
+
+    def sort_by_name(self) -> None:
+        """Sorts matches by name. If matches aren't sorted, sorts ascending first, otherwise descending.
+        If the data is already sorted, then it reverses it."""
+
+        if self.sorted == "name/asc":
+            self.matches.reverse()
+            self.sorted = "name/desc"
         else:
-            if self.sorted == "size/asc":
+            if self.sorted == "name/desc":
                 self.matches.reverse()
             else:
-                self.matches.sort(key=operator.attrgetter("bytes", "path"), reverse=True)
-            self.sorted = "size/desc"
+                self.matches.sort(key=operator.attrgetter("path", "bytes"))
+            self.sorted = "name/asc"
 
 
     def plot_data(self):
@@ -456,8 +450,8 @@ class Database:
         if len(self.matches) < 2: # Plotting just one value is obsolete and raises a DivisionByZeroError
             return
         
-        x_axis = np.arange(len(self.matches))
-        y_axis = [np.float32(file.bytes) for file in self.matches]
+        x_axis = np.arange(len(self.matches), dtype=np.uint16)
+        y_axis = [np.uint32(file.bytes) for file in self.matches]
         
         plt.style.use("ggplot")
         
@@ -475,3 +469,20 @@ class Database:
         plt.legend()
         plt.tight_layout()
         plt.show()
+
+
+    def get_data(self) -> tuple:
+        """Returns (matches, matches_size)."""
+        return self.matches, self.format_bytes(self.matches_bytes)
+
+
+    def get_metadata(self) -> tuple:
+        """Returns (location, date, time, total_files, total_size)"""
+        return self.location, self.date, self.time, self.total_files, self.total_size
+
+
+    def is_sliced(self) -> bool:
+        """Boolean function that compares matches with the data.
+        If True, then display search output. If not, then clear.
+        If self.matches is slice of self.data, then a search has taken place, so search info must be displayed."""
+        return len(self.matches) != self.total_files
