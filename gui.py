@@ -207,9 +207,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self.actionUpdate_Data.setShortcut("Ctrl+U")
         self.actionUpdate_Data.triggered.connect(self.update_data)
         
-        # Scatter Plot
+        # Plot
         self.actionScatter_Plot_Search_Results = QtWidgets.QAction(self)
-        self.actionScatter_Plot_Search_Results.setText("Scatter Plot")
+        self.actionScatter_Plot_Search_Results.setText("Plot")
         self.actionScatter_Plot_Search_Results.setShortcut("Ctrl+P")
         self.actionScatter_Plot_Search_Results.triggered.connect(self.database.plot_data)
         
