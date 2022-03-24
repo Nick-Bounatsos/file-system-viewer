@@ -185,13 +185,13 @@ class MainWindow(QtWidgets.QMainWindow):
         # Menu Bar
         self.menubar = QtWidgets.QMenuBar(self)
         self.menubar.setGeometry(QtCore.QRect(0, 0, WIN_W, FRAME_HEIGHT))
+        self.setMenuBar(self.menubar)
         
         # Main Menu Categories
         self.menuFile = QtWidgets.QMenu(self.menubar)
         self.menuFile.setTitle("File")
         
         self.menuHelp = QtWidgets.QMenu(self.menubar)
-        self.setMenuBar(self.menubar)
         self.menuHelp.setTitle("Help")
         
         # Gather Data
@@ -214,7 +214,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.actionScatter_Plot_Search_Results.triggered.connect(self.database.plot_data)
         
         # Export As, and its' subcategories
-        self.menuExport_As = QtWidgets.QMenu(self.menuFile)
+        self.menuExport_As = QtWidgets.QMenu(self)
         self.menuExport_As.setTitle("Export As...")
 
         self.action_txt = QtWidgets.QAction(self)
@@ -299,7 +299,8 @@ class MainWindow(QtWidgets.QMainWindow):
         """Update data action (menubar). Get location from metadata, and call database gather data method
         with the location as dirpath. Then print the new data."""
 
-        self.database.gather_data(self.database.get_metadata()[0])
+        location = self.database.get_metadata()[0]
+        self.database.gather_data(location)
 
         self.print_data()
         self.print_metadata()
@@ -336,7 +337,9 @@ class MainWindow(QtWidgets.QMainWindow):
         
         item_selected = self.screen.currentItem().text()
 
-        filepath = location + item_selected.split(location)[-1]
+        # The following line ensures that double clicking will work whether the filepath is expanded or not
+        _delimiter = "~" if "~" in item_selected else location
+        filepath = location + item_selected.split(_delimiter)[-1]
 
         if os.path.exists(filepath):
             item_directory = filepath.rstrip(filepath.split(os.sep)[-1])
@@ -364,8 +367,14 @@ class MainWindow(QtWidgets.QMainWindow):
             self.search_info.setText(f"{len(data):,} files ({size})")
 
         if data:
-            for file in data:
-                self.screen.addItem(f"{f'{file.size:>10}':^31}{file.path}")
+            
+            # TODO: Introduce LIMIT
+            LIMIT = 500
+            length = len(data)
+            stop = length if length < LIMIT else LIMIT
+            
+            for i in range(stop):
+                self.screen.addItem(f"{f'{data[i].size:>10}':^31}{data[i].path}")
         else:
             self.screen.addItem("No files found.")
 

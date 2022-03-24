@@ -18,24 +18,18 @@ class File:
         self.size = size
 
 
-    def as_csv_row(self) -> list:
-        """Returns the data as a csv row [path, bytes] (intended for csv.writer.writerow())"""
-        return [self.path, self.bytes]
-
-
 class Database:
     """Class that behaves like a database.
-    Holds the data. Saves them, loads them, gathers new ones, sorts them, searches in them,
-    plots them, imports external ones.
+    Holds the data. Saves them, loads them, gathers new ones, sorts them,
+    searches in them, plots them, imports external ones.
     The data is saved in a list, as File objects, and when asked, a list of matches is returned.
-    The data itself doesn't change in the database, a copy is saved in self.matches
+    The data itself doesn't change in the database, a copy is saved in self.matches.
     This copy is then being sorted or searched within.
     Apart from the data, some metadata is also saved (location, total bytes/size, process time)
     Default encoding: utf-8
     """
     encoding = "utf-8"
     date_format = "%d-%b-%Y"
-    metadata_path = os.path.join("Data", "metadata.json")
     data_path = os.path.join("Data", "data.csv")
 
 
@@ -56,18 +50,25 @@ class Database:
         self.sorted = None
 
 
-    def save_data_as_csv(self) -> None:
+    def save_data(self) -> None:
         """Dumps data to a .csv as: path,bytes
         Encoding: "utf-8" by default."""
         
         with open(self.data_path, "w", encoding=self.encoding) as fp:
                 csv_writer = csv.writer(fp)
+                
+                # First row: Metadata
+                metadata_row = [self.location, self.date, self.time, self.total_files, self.total_bytes]
+                csv_writer.writerow(metadata_row)
+                
+                # Data
                 for file in self.data:
-                    csv_writer.writerow(file.as_csv_row())
+                    data_row = [file.path.replace(self.location, "~"), file.bytes]
+                    csv_writer.writerow(data_row)
 
 
-    def load_data_from_csv(self) -> None:
-        """Parses data from csv format.
+    def load_data(self) -> None:
+        """Parses data and metadata from csv format.
         Handles errors by creating a sample file, and calling the method again."""
 
         try:
@@ -76,14 +77,27 @@ class Database:
             with open(self.data_path, "r", encoding=self.encoding) as fp:
                 csv_reader = csv.reader(fp)
                 self.matches.clear()
+                                
+                # Parsing metadata from the first row
+                metadata = fp.readline().rstrip("\n").split(",")
+                # Note: .readline() counts as a file iteration. no next(csv_reader) is redundant
+                self.location = metadata[0]
+                self.date = metadata[1]
+                self.time = metadata[2]
+                self.total_files = int(metadata[3])
+                self.total_bytes = int(metadata[4])
+
+                # Parsing data
                 for row in csv_reader:
+                    # filepath = row[0].replace("~", self.location) # expanding ~
+                    filepath = row[0]
                     bytesize = int(row[1])
-                    self.matches.append(File(row[0], bytesize, self.format_bytes(bytesize)))
+                    self.matches.append(File(filepath, bytesize, self.format_bytes(bytesize)))
             self.data = tuple(self.matches)
 
         except FileNotFoundError:
             error_occured = True
-        except ValueError:  # Not enough values to unpack
+        except ValueError: # Not enough values to unpack
             error_occured = True
         except IndexError:
             error_occured = True
@@ -91,53 +105,11 @@ class Database:
         if error_occured:
             with open(self.data_path, "w", encoding=self.encoding) as fp:
                 csv_writer = csv.writer(fp)
+                csv_writer.writerow([self.location, self.date, self.time, self.total_files, self.total_bytes])
                 csv_writer.writerow(["No directory selected", 0])
-            self.load_data_from_csv()
+            self.load_data()
 
-
-    def save_metadata_as_json(self) -> None:
-        """Dumps metadata to a .json. These are the attributes:
-        location, date, total_files, total_bytes, time"""
-
-        with open(self.metadata_path, "w", encoding=self.encoding) as fp:
-            json.dump({"location": self.location,
-                       "date": self.date,
-                       "time": self.time,
-                       "total_files": len(self.data),
-                       "total_bytes": self.total_bytes}, fp)
-
-
-    def load_metadata_from_json(self) -> None:
-        """Parses metadata from json format.
-        Handles errors by creating a sample file, and calling the method again."""
-
-        try:
-            error_occured = False
-
-            with open(self.metadata_path, "r", encoding=self.encoding) as fp:
-                metadata = json.load(fp)
-                
-                self.location = metadata["location"]
-                self.date = metadata["date"]
-                self.total_files = metadata["total_files"]
-                self.total_bytes = self.matches_bytes = metadata["total_bytes"]
-                self.total_size = self.format_bytes(self.total_bytes)
-                self.time = metadata["time"]
-        except FileNotFoundError:
-            error_occured = True
-        except ValueError:  # Not enough values to unpack
-            error_occured = True
-        except IndexError:
-            error_occured = True
-
-        if error_occured:
-            with open(self.metadata_path, "w", encoding="utf-8")as fp:
-                json.dump({"location": "None",
-                            "date": "dd-mmm-yyyy",
-                            "time": "0.00",
-                            "total_files": 0,
-                            "total_bytes": 0}, fp)
-            self.load_metadata_from_json()
+        return bool(self.matches)
 
 
     def gather_data(self, dirpath: str) -> None:
@@ -188,17 +160,7 @@ class Database:
         self.total_files = len(self.data)
         self.total_size = self.format_bytes(self.total_bytes)
 
-        self.save_metadata_as_json()
-        self.save_data_as_csv()
-
-
-    def load_data(self) -> bool:
-        """Attempts to load previous data."""
-        
-        self.load_metadata_from_json()
-        self.load_data_from_csv()
-
-        return bool(self.matches)
+        self.save_data()
 
 
     @staticmethod
@@ -271,8 +233,8 @@ class Database:
         elif key.startswith("^"):
             key = key[1:]
             self.matches = [self.data[i] for i in range(n) if self.data[i].path.startswith(key)]
-        elif key.startswith("$"):
-            key = key[1:]
+        elif key.endswith("$"):
+            key = key[:-1]
             self.matches = [self.data[i] for i in range(n) if self.data[i].path.endswith(key)]
         # Case insensitive search
         elif key.startswith("%") and key.endswith("%"):
@@ -315,8 +277,8 @@ class Database:
             elif key2.startswith("^"):
                 key2 = key2[1:]
                 self.matches = [prev_matches[i] for i in range(n) if prev_matches[i].path.startswith(key2)]
-            elif key2.startswith("$"):
-                key2 = key2[1:]
+            elif key2.endswith("$"):
+                key2 = key2[:-1]
                 self.matches = [prev_matches[i] for i in range(n) if prev_matches[i].path.endswith(key2)]
             # Case insensitive search
             elif key2.startswith("%") and key2.endswith("%"):
@@ -347,7 +309,7 @@ class Database:
 
         # extensionless name
         export_path = os.path.join(os.getcwd(), "Exports",
-            f"Export {self.location.replace(os.path.sep, '_')}_{datetime.datetime.now().strftime('%d-%b-%Y')}")
+            f"Export {self.location.replace(os.path.sep, '_')}_{datetime.datetime.now().strftime(self.date_format)}")
         
         if kind == "text":
             export_path += ".txt"
@@ -360,8 +322,10 @@ class Database:
             export_path += ".csv"
             with open(export_path, "w", encoding=self.encoding) as fp:
                 csv_writer = csv.writer(fp)
+                csv_writer.writerow([self.location, self.date, self.time, self.total_files, self.total_bytes])
                 for file in self.data:
-                    csv_writer.writerow(file.as_csv_row())
+                    row = [file.path.replace(self.location, "~"), file.bytes]
+                    csv_writer.writerow(row)
 
         elif kind == "excel":
             export_path += ".xlsx"
@@ -374,8 +338,7 @@ class Database:
 
             df = pd.DataFrame(excel_data_dict)
             df.columns = ["Path", "Bytes", "Size"]
-            df.set_index("Path", inplace=True)
-            df.to_excel(export_path)
+            df.to_excel(export_path, sheet_name=os.path.basename(self.location), index=False)
         
         elif kind == "json":
             export_path += ".json"
@@ -388,26 +351,31 @@ class Database:
 
 
     def import_data(self, filepath: str) -> bool:
-        """Import data saved in .csv format. Returns True/False depending on the success of the process."""
+        """Import data/metadata saved in .csv format.
+        Returns True/False depending on the success of the process."""
         try:
 
             with open(filepath, "r", encoding=self.encoding) as fp:
                 csv_reader = csv.reader(fp)
                 self.matches.clear()
-                self.total_bytes = 0
-                for row in csv_reader:
-                    bytesize = int(row[1])
-                    self.total_bytes += bytesize
-                    self.matches.append(File(row[0], bytesize, self.format_bytes(bytesize)))
+                                
+                # Parsing metadata from the first row
+                metadata = fp.readline().rstrip("\n").split(",")
+                # Note: .readline() counts as a file iteration. no next(csv_reader) is redundant
+                self.location = metadata[0]
+                self.date = metadata[1]
+                self.time = metadata[2]
+                self.total_files = int(metadata[3])
+                self.total_bytes = int(metadata[4])
 
+                # Parsing data
+                for row in csv_reader:
+                    # filepath = row[0].replace("~", self.location) # expanding ~
+                    filepath = row[0]
+                    bytesize = int(row[1])
+                    self.matches.append(File(filepath, bytesize, self.format_bytes(bytesize)))
             self.data = tuple(self.matches)
-            self.matches_bytes = self.total_bytes
-            self.total_size = self.format_bytes(self.total_bytes)
-            self.location = "Imported data"
-            self.date = "unknown"
-            self.total_files = len(self.data)
-            self.time = "-"
-            self.sorted = None
+            
             return True
         except FileNotFoundError:
             return False
@@ -446,27 +414,59 @@ class Database:
 
 
     def plot_data(self):
-        """Scatter plots bytes of each file in self.matches. Logarithmic y-scale."""
+        """Creates a size histogram of self.data.
+        This is done manually and plotted as barchart due to the byte scale difference."""
         if len(self.matches) < 2: # Plotting just one value is obsolete and raises a DivisionByZeroError
             return
         
-        x_axis = np.arange(len(self.matches), dtype=np.uint16)
-        y_axis = [np.uint32(file.bytes) for file in self.matches]
+        def insert_labels(bars) -> None:
+            """Insert a text label above each bar in the barchart given."""
+            for bar in bars:
+                height = bar.get_height()
+                plt.annotate(f"{height:,}", xy=(bar.get_x() + bar.get_width() / 2, height),
+                            xytext=(0, 3), textcoords="offset points", ha="center", va="bottom")
+
+        bytesizes = [file.bytes for file in self.data]
         
-        plt.style.use("ggplot")
+        x_axis = ["0b - 0.5Kb", "0.5Kb - 1Kb",
+                "1Kb - 0.5Kb", "0.5Kb - 1Mb",
+                "1Mb - 0.5Mb", "0.5Mb - 1Gb", ">1Gb"]
+
+        # The 7 groups and their bytesize filters
+        g1 = g2 = g3 = g4 = g5 = g6 = g7 = 0
+        g2_filter = 1024
+        g1_filter = g2_filter // 2
+
+        g4_filter = 1024 ** 2
+        g3_filter = g4_filter // 2
+
+        g6_filter = 1024 ** 3
+        g5_filter = g6_filter // 2
         
-        plt.scatter(x_axis, y_axis, s=2, color="royalblue",edgecolor="black")
-        y_mean = np.mean(y_axis)
-        y_median = np.median(y_axis)
-        plt.plot(x_axis, np.full_like(x_axis, y_mean), color="red",
-                label=f"Mean = {self.format_bytes(y_mean)}", linewidth=1)
-        plt.plot(x_axis, np.full_like(x_axis, y_median), color="green",
-                label=f"Median = {self.format_bytes(y_median)}", linewidth=1)
-        plt.yscale("log")
-        plt.title("Search Results")
-        plt.xlabel("File")
-        plt.ylabel("Bytes")
-        plt.legend()
+        for bytesize in bytesizes:
+            if bytesize < g1_filter:
+                g1 += 1
+            elif bytesize < g2_filter:
+                g2 += 1
+            elif bytesize < g3_filter:
+                g3 += 1
+            elif bytesize < g4_filter:
+                g4 += 1
+            elif bytesize < g5_filter:
+                g5 += 1
+            elif bytesize < g6_filter:
+                g6 += 1
+            else:
+                g7 += 1
+        
+        y_axis = [g1, g2, g3, g4, g5, g6, g7]
+        
+        plt.grid(which="major", axis="y", linestyle=":", zorder=0)
+        bars = plt.bar(x_axis, y_axis, color="royalblue", edgecolor="black", zorder=3)
+        insert_labels(bars)
+
+        plt.title("Size Histogram")
+        plt.ylabel("Files")
         plt.tight_layout()
         plt.show()
 
@@ -478,6 +478,7 @@ class Database:
 
     def get_metadata(self) -> tuple:
         """Returns (location, date, time, total_files, total_size)"""
+        self.total_size = self.format_bytes(self.total_bytes)
         return self.location, self.date, self.time, self.total_files, self.total_size
 
 

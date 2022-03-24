@@ -8,4 +8,3 @@ win = gui.MainWindow(app, db)
 win.show()
 
 gui.sys.exit(app.exec_())
-
