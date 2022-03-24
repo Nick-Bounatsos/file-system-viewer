@@ -54,17 +54,13 @@ class Database:
         """Dumps data to a .csv as: path,bytes
         Encoding: "utf-8" by default."""
         
-        with open(self.data_path, "w", encoding=self.encoding) as fp:
+        metadata_row = [self.location, self.date, self.time, self.total_files, self.total_bytes]
+        data_rows = [[file.path.replace(self.location, "~"), file.bytes] for file in self.data]
+
+        with open(self.data_path, "w", encoding=self.encoding, newline="") as fp:
                 csv_writer = csv.writer(fp)
-                
-                # First row: Metadata
-                metadata_row = [self.location, self.date, self.time, self.total_files, self.total_bytes]
                 csv_writer.writerow(metadata_row)
-                
-                # Data
-                for file in self.data:
-                    data_row = [file.path.replace(self.location, "~"), file.bytes]
-                    csv_writer.writerow(data_row)
+                csv_writer.writerows(data_rows)
 
 
     def load_data(self) -> None:
@@ -103,7 +99,7 @@ class Database:
             error_occured = True
 
         if error_occured:
-            with open(self.data_path, "w", encoding=self.encoding) as fp:
+            with open(self.data_path, "w", encoding=self.encoding, newline="") as fp:
                 csv_writer = csv.writer(fp)
                 csv_writer.writerow([self.location, self.date, self.time, self.total_files, self.total_bytes])
                 csv_writer.writerow(["No directory selected", 0])
@@ -144,7 +140,7 @@ class Database:
 
                     bytesize = os.path.getsize(filepath)
                     self.total_bytes += bytesize
-                    self.matches.append(File(filepath, int(bytesize), self.format_bytes(int(bytesize))))
+                    self.matches.append(File(filepath.replace(self.location, "~"), bytesize, self.format_bytes(bytesize)))
                 except FileNotFoundError:
                     continue
                 except PermissionError:
@@ -320,7 +316,7 @@ class Database:
 
         elif kind == "csv":
             export_path += ".csv"
-            with open(export_path, "w", encoding=self.encoding) as fp:
+            with open(export_path, "w", encoding=self.encoding, newline="") as fp:
                 csv_writer = csv.writer(fp)
                 csv_writer.writerow([self.location, self.date, self.time, self.total_files, self.total_bytes])
                 for file in self.data:
