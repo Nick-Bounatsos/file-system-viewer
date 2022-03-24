@@ -4,7 +4,6 @@ import operator
 import json
 import csv
 import os
-import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
