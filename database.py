@@ -429,8 +429,8 @@ class Database:
         bytesizes = [file.bytes for file in self.data]
         
         x_axis = ["0b - 0.5Kb", "0.5Kb - 1Kb",
-                "1Kb - 0.5Kb", "0.5Kb - 1Mb",
-                "1Mb - 0.5Mb", "0.5Mb - 1Gb", ">1Gb"]
+                "1Kb - 0.5Mb", "0.5Mb - 1Mb",
+                "1Mb - 0.5Gb", "0.5Gb - 1Gb", ">1Gb"]
 
         # The 7 groups and their bytesize filters
         g1 = g2 = g3 = g4 = g5 = g6 = g7 = 0
