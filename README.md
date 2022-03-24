@@ -5,7 +5,7 @@ Features:
 - Filtering/Searching the data, up to two filters/searches
 - Using simple RegEx, case insensitivity while searching
 - Create a size histogram of the loaded data
-![Histogram sample](https://user-images.githubusercontent.com/95504963/159955103-7d87a90c-1cff-4202-b628-bdc99c353ed0.png)
+![Histogram sample](https://user-images.githubusercontent.com/95504963/159956394-d2bf1f7e-8be6-4f37-81ea-24e9be6c9cac.png)
 - Importing other data is possible (as .csv)
 - Double clicking on a row, will open the files' directory
 - Exporting as .{txt,csv,xlsx,json}
