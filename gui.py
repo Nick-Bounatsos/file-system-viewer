@@ -286,8 +286,8 @@ class MainWindow(QtWidgets.QMainWindow):
     def gather_data(self) -> None:
         """Gather data action (menubar). Get a new dirpath, and call database gather_data method"""
 
-        # askopendir. if it's cancelled, returns an empty string
-        dirpath = str(QtWidgets.QFileDialog.getExistingDirectory(self, "Select Directory"))
+        # askopendir. if it's cancelled, returns an empty string. The path returns has / as sep, regardless of os
+        dirpath = str(QtWidgets.QFileDialog.getExistingDirectory(self, "Select Directory")).replace("/", os.sep)
         if dirpath:
             self.database.gather_data(dirpath)
 
