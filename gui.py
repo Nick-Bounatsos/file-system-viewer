@@ -7,12 +7,14 @@ import os
 
 class MainWindow(QtWidgets.QMainWindow):
 
-    def __init__(self, app: object, database: object) -> None:
+    def __init__(self, database: object) -> None:
         """Setup the UI, connect to the database and add event listeners."""
         super(MainWindow, self).__init__()
         self.database = database
 
-        self.setup_interface(app)
+        self.limit = 1000
+
+        self.setup_interface()
 
         # Load previous data, if they exist
         if self.database.load_data():
@@ -20,21 +22,17 @@ class MainWindow(QtWidgets.QMainWindow):
             self.print_metadata()
 
 
-    def setup_interface(self, app: object) -> None:
+    def setup_interface(self) -> None:
         """Get the main window and setup the whole UI."""
         
         # Get system screen width and height, to enable fullscreen
-        system_screen = app.primaryScreen()
-        screen_dimensions = system_screen.size()
-        # TODO: There's an offset, possibly the menubars outside the app. Need to add relative positioning
-        WIN_W, WIN_H = screen_dimensions.width() - 73, screen_dimensions.height() - 67
         FONT = QtGui.QFont("Constantia Monospace", 10)
         self.setFont(FONT)
         
         # Window size/name customization
         self.setWindowTitle("Database")
+        self.setMinimumSize(820, 480)
         self.showMaximized()
-        self.setMinimumSize(WIN_W, WIN_H)
 
 
         # Application Icon
@@ -43,100 +41,85 @@ class MainWindow(QtWidgets.QMainWindow):
         self.setWindowIcon(icon)
 
         self.centralwidget = QtWidgets.QWidget(self)
-        self.centralwidget.setMinimumSize(QtCore.QSize(0, 0))
 
-        # The same frame height will be used for both frames
-        FRAME_HEIGHT = 20
+        self.verticalLayout = QtWidgets.QVBoxLayout(self.centralwidget)
+        self.verticalLayout.setContentsMargins(0, 0, 0, 0)
 
+
+        # Metadata display frame dimensions
+        SEARCH_RESULTS_W = 250
+
+        
         # The top frame, data and search info are displayed here
-        self.data_display_frame = QtWidgets.QFrame(self.centralwidget)
-        self.data_display_frame.setEnabled(True)
-        self.data_display_frame.setGeometry(QtCore.QRect(0, 0, WIN_W, FRAME_HEIGHT))
-                
-        # Data display frame dimensions
-        DATE_LABEL_W = 40
-        DATE_VAL_W = 95
-        FILES_LABEL_W = 40
-        FILES_VAL_W = 75
-        PROC_TIME_LABEL_W = 95
-        PROC_TIME_VAL_W = 50
-        
-        SEARCH_RESULTS_W = 200
-        SEARCH_BAR_W = 250
-        SEARCH_BTN_W = 60
+        self.dataWidget = QtWidgets.QWidget(self.centralwidget)
 
-        TOTAL_DATA_W = DATE_LABEL_W + DATE_VAL_W + FILES_LABEL_W + FILES_VAL_W + PROC_TIME_LABEL_W + PROC_TIME_VAL_W
-        TOTAL_SEARCH_W = SEARCH_RESULTS_W + SEARCH_BAR_W + SEARCH_BTN_W
-        
-        # Data display frame positions
-        DATE_VAL_X = DATE_LABEL_W
-        FILES_X = DATE_LABEL_W + DATE_VAL_W
-        FILES_VAL_X = FILES_X + FILES_LABEL_W
-        PROC_TIME_X = FILES_VAL_X + FILES_VAL_W
-        PROC_TIME_VAL_X = PROC_TIME_X + PROC_TIME_LABEL_W
+        self.dataLayout = QtWidgets.QHBoxLayout(self.dataWidget)
+        self.dataLayout.setContentsMargins(0, 5, 0, 0)
 
-        # TODO: Not a clue on why there's this offset
-        SEARCH_BAR_GAP = WIN_W - TOTAL_DATA_W - TOTAL_SEARCH_W + 50
-        # It's not always the case
-        SEARCH_RESULTS_X = SEARCH_BAR_GAP + PROC_TIME_VAL_X
-        SEARCH_BAR_X = SEARCH_RESULTS_X + SEARCH_RESULTS_W
-        SEARCH_BTN_X = SEARCH_BAR_X + SEARCH_BAR_W
-        
-        # Date label, fixed value
-        self.date_label = QtWidgets.QLabel(self.data_display_frame)
-        self.date_label.setGeometry(QtCore.QRect(0, 0, DATE_LABEL_W, FRAME_HEIGHT))
-        self.date_label.setText("Date:")
-        
-        # Date value label, accessed by database
-        self.date_value = QtWidgets.QLabel(self.data_display_frame)
-        self.date_value.setGeometry(QtCore.QRect(DATE_VAL_X, 0, DATE_VAL_W, FRAME_HEIGHT))
-        self.date_value.setAlignment(QtCore.Qt.AlignLeading|QtCore.Qt.AlignLeft|QtCore.Qt.AlignVCenter)
+        # Date label
+        self.date_label = QtWidgets.QLabel(self.dataWidget)
+        self.date_label.setText(" Date:")
        
-        # Files label, fixed value
-        self.files_label = QtWidgets.QLabel(self.data_display_frame)
-        self.files_label.setGeometry(QtCore.QRect(FILES_X, 0, FILES_LABEL_W, FRAME_HEIGHT))
-        self.files_label.setText("Files:")
+        # Files label
+        self.files_label = QtWidgets.QLabel(self.dataWidget)
+        self.files_label.setText(" | Files:")
         
-        # Files value label, accessed by database
-        self.files_value = QtWidgets.QLabel(self.data_display_frame)
-        self.files_value.setGeometry(QtCore.QRect(FILES_VAL_X, 0, FILES_VAL_W, FRAME_HEIGHT))
-        self.files_value.setAlignment(QtCore.Qt.AlignLeading|QtCore.Qt.AlignLeft|QtCore.Qt.AlignVCenter)
+        # Process time label
+        self.proc_time_label = QtWidgets.QLabel(self.dataWidget)
+        self.proc_time_label.setText(" | Process time:")
         
-        # Process time label, fixed value
-        self.proc_time_label = QtWidgets.QLabel(self.data_display_frame)
-        self.proc_time_label.setGeometry(QtCore.QRect(PROC_TIME_X, 0, PROC_TIME_LABEL_W, FRAME_HEIGHT))
-        self.proc_time_label.setText("Process time:")
 
-        # Process time value label, accessed by database
-        self.proc_time = QtWidgets.QLabel(self.data_display_frame)
-        self.proc_time.setGeometry(QtCore.QRect(PROC_TIME_VAL_X, 0, PROC_TIME_VAL_W, FRAME_HEIGHT))
-        self.proc_time.setAlignment(QtCore.Qt.AlignLeading|QtCore.Qt.AlignLeft|QtCore.Qt.AlignVCenter)
-        
-        
         # Search results output
-        self.search_info = QtWidgets.QLabel(self.data_display_frame)
-        self.search_info.setGeometry(QtCore.QRect(SEARCH_RESULTS_X, 0, SEARCH_RESULTS_W, FRAME_HEIGHT))
+        self.search_info = QtWidgets.QLabel(self.dataWidget)
         self.search_info.setAlignment(QtCore.Qt.AlignLeading|QtCore.Qt.AlignRight|QtCore.Qt.AlignVCenter)
+        self.search_info.setMinimumWidth(SEARCH_RESULTS_W)
         self.search_info.setText("")
         
         # Search text box
-        self.search_bar = QtWidgets.QLineEdit(self.data_display_frame)
-        self.search_bar.setGeometry(QtCore.QRect(SEARCH_BAR_X, 0, SEARCH_BAR_W, FRAME_HEIGHT))
+        self.search_bar = QtWidgets.QLineEdit(self.dataWidget)
         
         # Search Button, Bound to <Return> (Enter)
-        self.search_button = QtWidgets.QPushButton(self.data_display_frame)
-        self.search_button.setGeometry(QtCore.QRect(SEARCH_BTN_X, 0, SEARCH_BTN_W, FRAME_HEIGHT))
+        self.search_button = QtWidgets.QPushButton(self.dataWidget)
         self.search_button.setText("Search")
         self.search_button.setShortcut("Return")
         self.search_button.clicked.connect(self.search_data)
 
-        # Main screen area, data will be displayed here
-        SCREEN_W = WIN_W
-        # 3 * FRAME_HEIGHT, the 3rd "frame" is the menubar
-        SCREEN_H = WIN_H - 3 * FRAME_HEIGHT
 
+        self.dataLayout.addWidget(self.date_label)
+        self.dataLayout.addWidget(self.files_label)
+        self.dataLayout.addWidget(self.proc_time_label)
+        self.dataLayout.addWidget(self.search_info)
+        self.dataLayout.addWidget(self.search_bar)
+        self.dataLayout.addWidget(self.search_button)
+
+
+        # The bottom (2nd) frame, containing buttons that'll sort the data
+        self.sortButtonsWidget = QtWidgets.QWidget(self.centralwidget)
+
+        self.sortButtonsLayout = QtWidgets.QHBoxLayout(self.sortButtonsWidget)
+        self.sortButtonsLayout.setContentsMargins(0, 0, 0, 0)
+
+        
+        # Size button width. The path button width changes accordingly
+        SIZE_BTN_W = 150
+
+        # Size Button. Will be accessed, so that the text changes depending on sorting
+        self.size_button = QtWidgets.QPushButton(self.sortButtonsWidget)
+        self.size_button.setFixedWidth(SIZE_BTN_W)
+        self.size_button.setText("Size")
+        self.size_button.clicked.connect(self.sort_by_size)
+        
+        # Path Button. Will be accessed, so that the text changes depending on sorting
+        self.path_button = QtWidgets.QPushButton(self.sortButtonsWidget)
+        self.path_button.setText("Path")
+        self.path_button.clicked.connect(self.sort_by_name)
+
+        self.sortButtonsLayout.addWidget(self.size_button)
+        self.sortButtonsLayout.addWidget(self.path_button)
+
+
+        # Main screen area, data will be displayed here
         self.screen = QtWidgets.QListWidget(self.centralwidget)
-        self.screen.setGeometry(QtCore.QRect(0, 2 * FRAME_HEIGHT, SCREEN_W, SCREEN_H))
         self.screen.itemDoubleClicked.connect(self.open_directory)
 
         
@@ -147,49 +130,29 @@ class MainWindow(QtWidgets.QMainWindow):
         self.scroll_bar_v.setStyleSheet("background : lightgray;")
         self.scroll_bar_h.setStyleSheet("background : lightgray;")
 
+
         self.screen.setVerticalScrollBar(self.scroll_bar_v)
         self.screen.setHorizontalScrollBar(self.scroll_bar_h)
 
 
-        # The bottom (2nd) frame, containing buttons that'll sort the data
-        self.buttons_frame = QtWidgets.QFrame(self.centralwidget)
-        # y is FRAME_HEIGHT so that it always starts right under the first frame
-        self.buttons_frame.setGeometry(QtCore.QRect(0, FRAME_HEIGHT, WIN_W, FRAME_HEIGHT))
-        
-        # Button widths
-        SIZE_BTN_W = 150
-        PATH_BTN_X = SIZE_BTN_W
-        PATH_BTN_W = WIN_W - SIZE_BTN_W
+        # Vertical Layout to tie them up
+        self.verticalLayout.addWidget(self.dataWidget)
+        self.verticalLayout.addWidget(self.sortButtonsWidget)
+        self.verticalLayout.addWidget(self.screen)
 
-        # Size Button. Will be accessed, so that the text changes depending on sorting
-        self.size_button = QtWidgets.QPushButton(self.buttons_frame)
-        self.size_button.setGeometry(QtCore.QRect(0, 0, SIZE_BTN_W, FRAME_HEIGHT))
-        self.size_button.setText("Size")
-        self.size_button.clicked.connect(self.sort_by_size)
-        
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Fixed)
-        sizePolicy.setHorizontalStretch(0)
-        sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(self.size_button.sizePolicy().hasHeightForWidth())
-        self.size_button.setSizePolicy(sizePolicy)
-        self.size_button.setCursor(QtGui.QCursor(QtCore.Qt.ArrowCursor))
-        
-        # Path Button. Will be accessed, so that the text changes depending on sorting
-        self.path_button = QtWidgets.QPushButton(self.buttons_frame)
-        self.path_button.setGeometry(QtCore.QRect(PATH_BTN_X, 0, PATH_BTN_W, FRAME_HEIGHT))
-        self.path_button.setText("Path")
-        self.path_button.clicked.connect(self.sort_by_name)
-        
         self.setCentralWidget(self.centralwidget)
         
+
         # Menu Bar
         self.menubar = QtWidgets.QMenuBar(self)
-        self.menubar.setGeometry(QtCore.QRect(0, 0, WIN_W, FRAME_HEIGHT))
         self.setMenuBar(self.menubar)
         
         # Main Menu Categories
         self.menuFile = QtWidgets.QMenu(self.menubar)
         self.menuFile.setTitle("File")
+        
+        self.menuView = QtWidgets.QMenu(self.menubar)
+        self.menuView.setTitle("View")
         
         self.menuHelp = QtWidgets.QMenu(self.menubar)
         self.menuHelp.setTitle("Help")
@@ -208,10 +171,10 @@ class MainWindow(QtWidgets.QMainWindow):
         self.actionUpdate_Data.triggered.connect(self.update_data)
         
         # Plot
-        self.actionScatter_Plot_Search_Results = QtWidgets.QAction(self)
-        self.actionScatter_Plot_Search_Results.setText("Plot")
-        self.actionScatter_Plot_Search_Results.setShortcut("Ctrl+P")
-        self.actionScatter_Plot_Search_Results.triggered.connect(self.database.plot_data)
+        self.actionPlot = QtWidgets.QAction(self)
+        self.actionPlot.setText("Plot")
+        self.actionPlot.setShortcut("Ctrl+P")
+        self.actionPlot.triggered.connect(self.database.plot_data)
         
         # Export As, and its' subcategories
         self.menuExport_As = QtWidgets.QMenu(self)
@@ -243,8 +206,33 @@ class MainWindow(QtWidgets.QMainWindow):
         self.actionExit = QtWidgets.QAction(self)
         self.actionExit.setText("Exit")
         self.actionExit.setShortcut("Ctrl+Q")
-        self.actionExit.triggered.connect(lambda: sys.exit(app.exec_))
+        self.actionExit.triggered.connect(sys.exit)
         
+        # Limit
+        self.menuLimit = QtWidgets.QMenu(self)
+        self.menuLimit.setTitle(f"Limit: {self.limit}")
+
+        # Change limit categories
+        self.actionSetLimit_1 = QtWidgets.QAction(self)
+        self.actionSetLimit_1.setText(f"Set {250}")
+        self.actionSetLimit_1.triggered.connect(lambda: self.set_limit(250))
+
+        self.actionSetLimit_2 = QtWidgets.QAction(self)
+        self.actionSetLimit_2.setText(f"Set {500}")
+        self.actionSetLimit_2.triggered.connect(lambda: self.set_limit(500))
+
+        self.actionSetLimit_3 = QtWidgets.QAction(self)
+        self.actionSetLimit_3.setText(f"Set {1000}")
+        self.actionSetLimit_3.triggered.connect(lambda: self.set_limit(1000))
+
+        self.actionSetLimit_4 = QtWidgets.QAction(self)
+        self.actionSetLimit_4.setText(f"Set {2000}")
+        self.actionSetLimit_4.triggered.connect(lambda: self.set_limit(2000))
+
+        self.actionSetLimit_5 = QtWidgets.QAction(self)
+        self.actionSetLimit_5.setText("Disable limit")
+        self.actionSetLimit_5.triggered.connect(lambda: self.set_limit(-1))
+
         # Visit GitHub
         self.actionVisit_GitHub = QtWidgets.QAction(self)
         self.actionVisit_GitHub.setText("Visit GitHub")
@@ -267,12 +255,22 @@ class MainWindow(QtWidgets.QMainWindow):
         self.menuFile.addAction(self.actionGather_Data)
         self.menuFile.addAction(self.actionUpdate_Data)
         self.menuFile.addSeparator()
-        self.menuFile.addAction(self.actionScatter_Plot_Search_Results)
+        self.menuFile.addAction(self.actionPlot)
         self.menuFile.addSeparator()
         self.menuFile.addAction(self.menuExport_As.menuAction())
         self.menuFile.addAction(self.actionImport)
         self.menuFile.addSeparator()
         self.menuFile.addAction(self.actionExit)
+
+        # Adding change limit categories to Limit
+        self.menuLimit.addAction(self.actionSetLimit_1)
+        self.menuLimit.addAction(self.actionSetLimit_2)
+        self.menuLimit.addAction(self.actionSetLimit_3)
+        self.menuLimit.addAction(self.actionSetLimit_4)
+        self.menuLimit.addAction(self.actionSetLimit_5)
+
+        # Adding View categories to View
+        self.menuView.addAction(self.menuLimit.menuAction())
         
         # Adding Help categories to Help
         self.menuHelp.addAction(self.actionVisit_GitHub)
@@ -280,6 +278,7 @@ class MainWindow(QtWidgets.QMainWindow):
         
         # Adding the big categories to the menu bar
         self.menubar.addAction(self.menuFile.menuAction())
+        self.menubar.addAction(self.menuView.menuAction())
         self.menubar.addAction(self.menuHelp.menuAction())
 
 
@@ -345,11 +344,26 @@ class MainWindow(QtWidgets.QMainWindow):
             item_directory = filepath.rstrip(filepath.split(os.sep)[-1])
             
             if sys.platform.startswith("win"):
-                os.starfile(item_directory)
+                os.startfile(item_directory)
             elif sys.platform.startswith("linux"):
                 subprocess.run(["xdg-open", item_directory])
             else:
                 subprocess.run(["open", item_directory])
+
+
+    def set_limit(self, new_limit: int) -> None:
+        """Set self.limit (Limit of rows per page)."""
+        
+        if new_limit == -1:
+            new_limit = self.database.get_metadata()[3]
+
+        if new_limit == self.limit:
+            return
+        
+        self.limit = new_limit
+        self.menuLimit.setTitle(f"Limit: {self.limit}")
+
+        self.print_data()
 
 
     def print_data(self) -> None:
@@ -368,10 +382,8 @@ class MainWindow(QtWidgets.QMainWindow):
 
         if data:
             
-            # TODO: Introduce LIMIT
-            LIMIT = 500
             length = len(data)
-            stop = length if length < LIMIT else LIMIT
+            stop = length if length < self.limit else self.limit
             
             for i in range(stop):
                 self.screen.addItem(f"{f'{data[i].size:>10}':^31}{data[i].path}")
@@ -386,9 +398,9 @@ class MainWindow(QtWidgets.QMainWindow):
 
         location, date, time, total_files, total_size = self.database.get_metadata()
         self.setWindowTitle(f"Database - {location}")
-        self.date_value.setText(date)
-        self.proc_time.setText(time)
-        self.files_value.setText(f"{total_files:,}")
+        self.date_label.setText(f" Date: {date}")
+        self.proc_time_label.setText(f" | Process time: {time}")
+        self.files_label.setText(f" | Files: {total_files:,}")
         self.size_button.setText(f"Size ({total_size})")
 
 
@@ -406,9 +418,9 @@ class MainWindow(QtWidgets.QMainWindow):
         elif sort_kind.startswith("size"):
             self.path_button.setText("Path")
             if sort_kind.endswith("asc"):
-                self.size_button.setText(self.size_button.text().rstrip(" ↑") + " ↓")
+                self.size_button.setText(self.size_button.text().rstrip(" ↑").rstrip(" ↓") + " ↓")
             else:
-                self.size_button.setText(self.size_button.text().rstrip(" ↓") + " ↑")
+                self.size_button.setText(self.size_button.text().rstrip(" ↑").rstrip(" ↓") + " ↑")
         else:
             self.size_button.setText(self.size_button.text().rstrip(" ↓").rstrip(" ↑"))
             if sort_kind.endswith("asc"):
