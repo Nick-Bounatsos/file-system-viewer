@@ -54,7 +54,9 @@ class Database:
         Encoding: "utf-8" by default."""
         
         metadata_row = [self.location, self.date, self.time, self.total_files, self.total_bytes]
-        data_rows = [[file.path.replace(self.location, "~"), file.bytes] for file in self.data]
+        data_rows = []
+        for file in self.data:
+            data_rows.append([file.path.replace(self.location, "~"), file.bytes])
 
         with open(self.data_path, "w", encoding=self.encoding, newline="") as fp:
                 csv_writer = csv.writer(fp)
