@@ -134,7 +134,7 @@ class Database:
                 try:
                     filepath = os.path.join(path, file)
 
-                    # TODO: files with, are currently ignored. Include them
+                    # TODO: files with comma are currently ignored. Include them
                     # if a comma is found in a pathname, it will mess up the csv delimiter. ignore these paths
                     if "," in filepath:
                         continue
@@ -310,39 +310,58 @@ class Database:
         
         if kind == "text":
             export_path += ".txt"
-            with open(export_path, "w", encoding=self.encoding) as txt_file:
-                txt_file.write(f"{self.date}\nTotal files: {self.total_files}\nTotal size: {self.total_size}\n\n")
+            with open(export_path, "w", encoding=self.encoding) as fp:
+                fp.write(f"{self.date}\n")
+                fp.write(f"~ = {self.location}\n")
+                fp.write(f"Process time: {self.time}\n")
+                fp.write(f"Total files: {self.total_files}\n")
+                fp.write(f"Total size: {self.total_size}\n\n")
                 for file in self.data:
-                    txt_file.write(f"{file.size}{' ' * 8}{file.path}\n")
+                    fp.write(f"{file.size}{' ' * 8}{file.path}\n")
 
         elif kind == "csv":
             export_path += ".csv"
+            
+            metadata_row = [self.location, self.date, self.time, self.total_files, self.total_bytes]
+            data_rows = []
+            for file in self.data:
+                data_rows.append([file.path.replace(self.location, "~"), file.bytes])
+
             with open(export_path, "w", encoding=self.encoding, newline="") as fp:
-                csv_writer = csv.writer(fp)
-                csv_writer.writerow([self.location, self.date, self.time, self.total_files, self.total_bytes])
-                for file in self.data:
-                    row = [file.path.replace(self.location, "~"), file.bytes]
-                    csv_writer.writerow(row)
+                    csv_writer = csv.writer(fp)
+                    csv_writer.writerow(metadata_row)
+                    csv_writer.writerows(data_rows)
 
         elif kind == "excel":
             export_path += ".xlsx"
             # convert the data to a dictionary, and then to a pandas.DataFrame, then export as excel.
-            excel_data_dict = {"path": [], "bytes": [], "size": []}
+            excel_data_dict = {
+                "path": [],
+                "bytes": [],
+                "size": []
+                }
             for file in self.data:
                 excel_data_dict["path"].append(file.path)
                 excel_data_dict["bytes"].append(file.bytes)
                 excel_data_dict["size"].append(file.size)
 
             df = pd.DataFrame(excel_data_dict)
-            df.columns = ["Path", "Bytes", "Size"]
-            df.to_excel(export_path, sheet_name=os.path.basename(self.location), index=False)
+            df.columns = [f"Path ({self.location})", "Bytes", "Size"]
+            df.to_excel(export_path, sheet_name=f"{os.path.basename(self.location)} - {self.date}", index=False)
         
         elif kind == "json":
             export_path += ".json"
-            # dictionary with a single key named data
-            json_data_dict = {"data": []}
+            # dictionary with metadata keys and a single data key. Data will be appended to a list
+            json_data_dict = {
+                "location": self.location,
+                "date": self.date,
+                "time": self.time,
+                "total_files": self.total_files,
+                "total_bytes": self.total_bytes,
+                "data": []
+                }
             for file in self.data:
-                json_data_dict["data"].append([file.path, file.bytes, file.size])
+                json_data_dict["data"].append([file.path, file.bytes])
             with open(export_path, "w", encoding=self.encoding) as fp:
                 json.dump(json_data_dict, fp, indent=4)
 
