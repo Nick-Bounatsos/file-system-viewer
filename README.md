@@ -2,7 +2,7 @@
 file-system-viewer (or Database) is a project that gathers filepaths and their sizes from your system
 Features:
 - Sorting the data
-- Filtering/Searching the data, up to two filters/searches
+- Filtering/Searching the data, unlimited filters/searches
 - Using simple RegEx, case insensitivity while searching
 - Create a size histogram of the loaded data
 ![Histogram sample](https://user-images.githubusercontent.com/95504963/159956394-d2bf1f7e-8be6-4f37-81ea-24e9be6c9cac.png)
