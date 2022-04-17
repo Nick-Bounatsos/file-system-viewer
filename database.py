@@ -1,7 +1,7 @@
+import pymongo
 import datetime
 import time
 import operator
-import json
 import csv
 import os
 import pandas as pd
@@ -27,9 +27,10 @@ class Database:
     Apart from the data, some metadata is also saved (location, total bytes/size, process time)
     Default encoding: utf-8
     """
+    host = "127.0.0.1"
+    port = 27017
     encoding = "utf-8"
     date_format = "%d-%b-%Y"
-    data_path = os.path.join("Data", "data.csv")
 
 
     def __init__(self) -> None:
@@ -50,61 +51,71 @@ class Database:
 
 
     def save_data(self) -> None:
-        """Dumps data to a .csv as: path,bytes
-        Encoding: "utf-8" by default."""
+        """Stores metadata and data to a MongoDB database.
+        Opens and closes the connection at the end."""
+
+        conn = pymongo.MongoClient(f"mongodb://{self.host}:{self.port}")
+        mydb = conn["fsv"]
+
+        metadata_col = mydb["metadata"]
+        data_col = mydb["data"]
         
-        metadata_row = [self.location, self.date, self.time, self.total_files, self.total_bytes]
+        metadata = {
+            "location" : self.location,
+            "date" : self.date,
+            "time" : self.time,
+            "total_files" : self.total_files,
+            "total_bytes" : self.total_bytes
+        }
+
+        # Delete old and insert new metadata
+        # Metadata isn't updated because this way errors can be avoided with future changes
+        metadata_col.delete_many({})
+        metadata_col.insert_one(metadata)
+        
+
         data_rows = []
         for file in self.data:
-            data_rows.append([file.path.replace(self.location, "~"), file.bytes])
+            data_rows.append({
+                "path": file.path.replace(self.location, "~"),
+                "bytes": file.bytes})
 
-        with open(self.data_path, "w", encoding=self.encoding, newline="") as fp:
-                csv_writer = csv.writer(fp, delimiter=";")
-                csv_writer.writerow(metadata_row)
-                csv_writer.writerows(data_rows)
+        # Delete old and insert new data
+        data_col.delete_many({})
+        data_col.insert_many(data_rows)
+
+        conn.close()
 
 
     def load_data(self) -> None:
-        """Parses data and metadata from csv format.
-        Handles errors by creating a sample file, and calling the method again."""
+        """Parses metadata and data from a MongoDB database.
+        Opens and closes the connection at the end."""
 
-        try:
-            error_occured = False
+        # Opening mongodb connection, reading data and closing it
+        conn = pymongo.MongoClient(f"mongodb://{self.host}:{self.port}")
+        mydb = conn["fsv"]
 
-            with open(self.data_path, "r", encoding=self.encoding) as fp:
-                csv_reader = csv.reader(fp, delimiter=";")
-                self.matches.clear()
-                                
-                # Parsing metadata from the first row
-                metadata = fp.readline().rstrip("\n").split(";")
-                # Note: .readline() counts as a file iteration. no next(csv_reader) is redundant
-                self.location = metadata[0]
-                self.date = metadata[1]
-                self.time = metadata[2]
-                self.total_files = int(metadata[3])
-                self.total_bytes = int(metadata[4])
+        metadata_col = mydb["metadata"]
+        data_col = mydb["data"]
 
-                # Parsing data
-                for row in csv_reader:
-                    # filepath = row[0].replace("~", self.location) # expanding ~
-                    filepath = row[0]
-                    bytesize = int(row[1])
-                    self.matches.append(File(filepath, bytesize, self.format_bytes(bytesize)))
-            self.data = tuple(self.matches)
+        metadata = metadata_col.find_one({},{"_id": 0})
+        data = data_col.find({},{"_id": 0})
+        
+        conn.close()
 
-        except FileNotFoundError:
-            error_occured = True
-        except ValueError: # Not enough values to unpack
-            error_occured = True
-        except IndexError:
-            error_occured = True
+        # Metadata/Data parsing
+        self.location = metadata["location"]
+        self.date = metadata["date"]
+        self.time = metadata["time"]
+        self.total_files = metadata["total_files"]
+        self.total_bytes = metadata["total_bytes"]
 
-        if error_occured:
-            with open(self.data_path, "w", encoding=self.encoding, newline="") as fp:
-                csv_writer = csv.writer(fp, delimiter=";")
-                csv_writer.writerow([self.location, self.date, self.time, self.total_files, self.total_bytes])
-                csv_writer.writerow(["No directory selected", 0])
-            self.load_data()
+        for row in data:
+            filepath = row["path"]
+            bytesize = row["bytes"]
+            self.matches.append(File(filepath, bytesize, self.format_bytes(bytesize)))
+
+        self.data = tuple(self.matches)
 
         return bool(self.matches)
 
@@ -265,11 +276,19 @@ class Database:
 
     def export_as(self, kind: str) -> None:
         """Exports the data as <kind>.
-        @kind values: csv text excel json"""
+        @kind values: csv text excel"""
 
-        # extensionless name
-        export_path = os.path.join(os.getcwd(), "Exports",
-            f"Export {self.location.replace(os.path.sep, '_')}_{datetime.datetime.now().strftime(self.date_format)}")
+        # TODO: Exporting as a mongodb to be loaded directly??
+        # mongoexport --db=fsv --collection=metadata --out=metadata.json
+        # mongoexport --db=fsv --collection=data --out=data.json
+
+        if not os.path.exists("Exports"):
+            os.mkdir("Exports")
+
+        # Extensionless name
+        _loc = self.location.replace(os.path.sep, "_")
+        _date = datetime.datetime.now().strftime(self.date_format)
+        export_path = os.path.join("Exports", f"Export {_loc}_{_date}")
         
         if kind == "text":
             export_path += ".txt"
@@ -297,7 +316,7 @@ class Database:
 
         elif kind == "excel":
             export_path += ".xlsx"
-            # convert the data to a dictionary, and then to a pandas.DataFrame, then export as excel.
+            # Convert the data to a dictionary, and then to a pandas.DataFrame, then export as excel.
             excel_data_dict = {
                 "path": [],
                 "bytes": [],
@@ -311,27 +330,16 @@ class Database:
             df = pd.DataFrame(excel_data_dict)
             df.columns = [f"Path ({self.location})", "Bytes", "Size"]
             df.to_excel(export_path, sheet_name=f"{os.path.basename(self.location)} - {self.date}", index=False)
-        
-        elif kind == "json":
-            export_path += ".json"
-            # dictionary with metadata keys and a single data key. Data will be appended to a list
-            json_data_dict = {
-                "location": self.location,
-                "date": self.date,
-                "time": self.time,
-                "total_files": self.total_files,
-                "total_bytes": self.total_bytes,
-                "data": []
-                }
-            for file in self.data:
-                json_data_dict["data"].append([file.path, file.bytes])
-            with open(export_path, "w", encoding=self.encoding) as fp:
-                json.dump(json_data_dict, fp, indent=4)
 
 
     def import_data(self, filepath: str) -> bool:
         """Import data/metadata saved in .csv format.
+        The format is:
+            1st line:   location;date;time;total_files;total_bytes
+            Next lines: path;bytes
+        
         Returns True/False depending on the success of the process."""
+        
         try:
 
             with open(filepath, "r", encoding=self.encoding) as fp:

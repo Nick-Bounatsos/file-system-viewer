@@ -1,0 +1,21 @@
+Connection:
+    mongodb://127.0.0.1:27017
+
+Database:
+    fsv
+
+Collections:
+    metadata = {
+        "location" : str,
+        "date" : str,
+        "time" : str,
+        "total_files" : int,
+        "total_bytes" : int
+    }
+
+    data = [
+        {"path": str, "bytes": int},
+        {"path": str, "bytes": int},
+        {"path": str, "bytes": int},
+        ...
+    ]

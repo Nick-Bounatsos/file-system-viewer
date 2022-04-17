@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en" style="font-size: 16px;">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Database</title>
+        <link rel="shortcut icon" type="image/x-icon" href="../Images/database.png" />
+        <link rel="stylesheet" href="style.css">
+    </head>
+    <body>
+        <h1 style="text-align: center;">Database General Manual</h1>
+        <hr>
+
+        <div id="info" style="text-align: center;">
+            <h2><i>Database</i></h2>
+            <p>Database gathers file data from your system and displays them on screen</p>
+        </div>
+            
+        <div id="functions">
+            <h3><b>Functions:</b></h3>
+            <p>
+                <b>Gather Data (Ctrl + G):</b> Gather Data from the directory specified<br>
+                <b>Update Data (Ctrl + U):</b> Re-gather data from the current directory<br>
+                <b>Import Data (Ctrl + I):</b> Import data from an external .csv file<br>
+                <b>Plot Data (Ctrl + P):</b> Plot (Histogram) the loaded data<br>
+                <b>Export As...:</b> Export data as .csv/.txt/.xlsx file<br>
+                <b>Sorting:</b> Clicking on the respective data button sorts the data displayed<br>
+            </p>
+        </div>
+
+        <div id="searching">
+                
+            <h3><b>Searching:</b></h3>
+
+            <table id="search-table">
+                <tr>
+                    <th><b>Operators</b></th>
+                    <th><b>Info</b></th>
+                </tr>
+            
+                <tr>
+                <td> => > < <=<i>key</i></td>
+                <td>eg. <=20mb</td>
+                </tr>
+            
+                <tr>
+                    <th colspan="2"><b>RegEx</b></th>
+                </tr>
+            
+                <tr>
+                <td>^<i>key</i></td>
+                <td>Starts with key</td>
+                </tr>
+            
+                <tr>
+                    <td><i>key</i>$</td>
+                    <td>Ends with key</td>
+                </tr>
+            
+                <tr>
+                    <td>%<i>key</i>%</td>
+                    <td>Case insensitive search</td>
+                </tr>
+            
+                <tr>
+                    <td>!<i>key</i></td>
+                    <td>Not in name</td>
+                </tr>
+                        
+                <tr>
+                    <td><i>key</i> && <i>key</i> && ...</td>
+                    <td>Multiple search keys</td>
+                </tr>
+            
+            </table>
+        </div>
+
+        <p>
+            <b>Double clicking</b> on a row, opens the parent directory of the file clicked.
+        </p>
+        
+        <footer>
+            <a href="https://github.com/Nick-Bounatsos/file-system-viewer" title="GitHub Repository">Visit repository</a>
+        </footer>
+    </body>
+</html>

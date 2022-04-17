@@ -37,7 +37,8 @@ class MainWindow(QtWidgets.QMainWindow):
 
         # Application Icon
         icon = QtGui.QIcon()
-        icon.addPixmap(QtGui.QPixmap("database.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
+        image = os.path.join("Images", "database.png")
+        icon.addPixmap(QtGui.QPixmap(image), QtGui.QIcon.Normal, QtGui.QIcon.Off)
         self.setWindowIcon(icon)
 
         self.centralwidget = QtWidgets.QWidget(self)
@@ -192,9 +193,6 @@ class MainWindow(QtWidgets.QMainWindow):
         self.action_xlsx.setText(".xlsx")
         self.action_xlsx.triggered.connect(lambda: self.database.export_as("excel"))
         
-        self.action_json = QtWidgets.QAction(self)
-        self.action_json.setText(".json")
-        self.action_json.triggered.connect(lambda: self.database.export_as("json"))
         
         # Import
         self.actionImport = QtWidgets.QAction(self)
@@ -249,7 +247,6 @@ class MainWindow(QtWidgets.QMainWindow):
         self.menuExport_As.addAction(self.action_txt)
         self.menuExport_As.addAction(self.action_csv)
         self.menuExport_As.addAction(self.action_xlsx)
-        self.menuExport_As.addAction(self.action_json)
 
         # Adding File categories to File
         self.menuFile.addAction(self.actionGather_Data)
@@ -443,4 +440,5 @@ class MainWindow(QtWidgets.QMainWindow):
         if url == "GitHub":
             webbrowser.open("https://github.com/Nick-Bounatsos/file-system-viewer")
         elif url == "Manual":
-            webbrowser.open("manual.html")
+            manual = os.path.join("Manual", "manual.html")
+            webbrowser.open(manual)
