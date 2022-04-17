@@ -59,7 +59,7 @@ class Database:
             data_rows.append([file.path.replace(self.location, "~"), file.bytes])
 
         with open(self.data_path, "w", encoding=self.encoding, newline="") as fp:
-                csv_writer = csv.writer(fp)
+                csv_writer = csv.writer(fp, delimiter=";")
                 csv_writer.writerow(metadata_row)
                 csv_writer.writerows(data_rows)
 
@@ -72,11 +72,11 @@ class Database:
             error_occured = False
 
             with open(self.data_path, "r", encoding=self.encoding) as fp:
-                csv_reader = csv.reader(fp)
+                csv_reader = csv.reader(fp, delimiter=";")
                 self.matches.clear()
                                 
                 # Parsing metadata from the first row
-                metadata = fp.readline().rstrip("\n").split(",")
+                metadata = fp.readline().rstrip("\n").split(";")
                 # Note: .readline() counts as a file iteration. no next(csv_reader) is redundant
                 self.location = metadata[0]
                 self.date = metadata[1]
@@ -101,7 +101,7 @@ class Database:
 
         if error_occured:
             with open(self.data_path, "w", encoding=self.encoding, newline="") as fp:
-                csv_writer = csv.writer(fp)
+                csv_writer = csv.writer(fp, delimiter=";")
                 csv_writer.writerow([self.location, self.date, self.time, self.total_files, self.total_bytes])
                 csv_writer.writerow(["No directory selected", 0])
             self.load_data()
@@ -134,14 +134,13 @@ class Database:
                 try:
                     filepath = os.path.join(path, file)
 
-                    # TODO: files with comma are currently ignored. Include them
-                    # if a comma is found in a pathname, it will mess up the csv delimiter. ignore these paths
-                    if "," in filepath:
+                    # Files with semicolon are ignored, because it's used as a csv delimiter
+                    if ";" in filepath:
                         continue
 
                     bytesize = os.path.getsize(filepath)
                     self.total_bytes += bytesize
-                    self.matches.append(File(filepath.replace(self.location, "~"), bytesize, self.format_bytes(bytesize)))
+                    self.matches.append(File(filepath.replace(dirpath, "~"), bytesize, self.format_bytes(bytesize)))
                 except FileNotFoundError:
                     continue
                 except PermissionError:
@@ -163,10 +162,12 @@ class Database:
     @staticmethod
     def format_bytes(bytes: int) -> str:
         """Converts bytes to a readable string format."""
+        
         TB = 1_099_511_627_776  # 1 << 40 or 2 ** 40
         GB = 1_073_741_824  # 1 << 30 or 2 ** 30
         MB = 1_048_576  # 1 << 20 or 2 ** 20
         KB = 1_024  # 1 << 10 or 2 ** 10
+        
         if bytes / TB >= 1:
             return f"{round(bytes / TB, 3):.3f} TB"
         elif bytes / GB >= 1:
@@ -175,124 +176,86 @@ class Database:
             return f"{round(bytes / MB, 3):.3f} MB"
         elif bytes / KB >= 1:
             return f"{round(bytes / KB, 3):.3f} KB"
+        
         return f"{bytes} Bytes"
 
 
     @staticmethod
     def parse_bytes(text: str) -> int:
-        """Parses and converts bytes strings into bytes. Returns bytes as integers.
+        """Parses and converts byte strings into bytes. Returns bytes as integers.
         This function is used to covert human readable bytes from the search bar, into bytes."""
+        
+        TB = 1_099_511_627_776
+        GB = 1_073_741_824
+        MB = 1_048_576
+        KB = 1_024
+        
         text = text.lower().replace(" ", "")
         if text.endswith("kb"):
-            return int(float(text[:-2]) * 1024)
+            return int(float(text[:-2]) * KB)
         elif text.endswith("mb"):
-            return int(float(text[:-2]) * (1 << 20))
+            return int(float(text[:-2]) * MB)
         elif text.endswith("gb"):
-            return int(float(text[:-2]) * (1 << 30))
+            return int(float(text[:-2]) * GB)
         elif text.endswith("tb"):
-            return int(float(text[:-2]) * (1 << 40))
-        elif text.endswith("bytes") or text.endswith("b") or text.endswith("byte"):
+            return int(float(text[:-2]) * TB)
+        elif text.endswith("b") or "byte" in text:
             return int(text.replace("b", "").replace("yte", "").replace("s", ""))
 
 
-    def search(self, key: str) -> None:
-        """Performs linear search, updates self.matches and their size."""
+    def search(self, query: str) -> None:
+        """Performs linear search, updates self.matches and their size.
+        query is broken down to its' keys (if there are multiple)."""
         self.sorted = None
-        if not key:
-            self.matches = list(self.data)
-            self.matches_bytes = self.total_bytes
+        self.matches = list(self.data)
+        self.matches_bytes = self.total_bytes
+        
+        if not query:
             return
 
-        n = self.total_files - 1
-        self.matches.clear()
+        queries = query.split(" && ")
 
-        try:
-            key, key2 = key.split(" && ")
-        except ValueError:
-            key2 = ""
-
-        # Filtered size search
-        if key.startswith(">"):
-            if key.startswith(">="):
-                size_filter = self.parse_bytes(key.replace(">=", ""))
-                self.matches = [self.data[i] for i in range(n) if self.data[i].bytes >= size_filter]
-            else:
-                size_filter = self.parse_bytes(key.replace(">", ""))
-                self.matches = [self.data[i] for i in range(n) if self.data[i].bytes > size_filter]
-        elif key.startswith("<"):
-            if key.startswith("<="):
-                size_filter = self.parse_bytes(key.replace("<=", ""))
-                self.matches = [self.data[i] for i in range(n) if self.data[i].bytes <= size_filter]
-            else:
-                size_filter = self.parse_bytes(key.replace("<", ""))
-                self.matches = [self.data[i] for i in range(n) if self.data[i].bytes < size_filter]
-        # RegEx name search
-        elif key.startswith("^"):
-            key = key[1:]
-            self.matches = [self.data[i] for i in range(n) if self.data[i].path.startswith(key)]
-        elif key.endswith("$"):
-            key = key[:-1]
-            self.matches = [self.data[i] for i in range(n) if self.data[i].path.endswith(key)]
-        # Case insensitive search
-        elif key.startswith("%") and key.endswith("%"):
-            key = key[1:-2].lower()
-            self.matches = [self.data[i] for i in range(n) if key in self.data[i].path.lower()]
-        # Not in name search
-        elif key.startswith("!"):
-            key = key[1:]
-            self.matches = [self.data[i] for i in range(n) if key not in self.data[i].path]
-        # Basename search
-        elif key.startswith("basename: ") or key2.startswith("Basename: "):
-            key = key[10:]
-            self.matches = [self.data[i] for i in range(n) if key in os.path.basename(self.data[i].path)]
-        # Full search
-        else:
-            self.matches = [self.data[i] for i in range(n)
-            if key in self.data[i].path or key in self.data[i].size]
-
-        # Key #2 search:
-        if key2:
-            n = len(self.matches)
-            prev_matches = self.matches.copy()
-            self.matches.clear()
+        for key in queries:
+            n = len(self.matches) - 1
+            
             # Filtered size search
-            if key2.startswith(">"):
-                if key2.startswith(">="):
-                    size_filter = self.parse_bytes(key2.replace(">=", ""))
-                    self.matches = [prev_matches[i] for i in range(n) if prev_matches[i].bytes >= size_filter]
+            if key.startswith(">"):
+                if key.startswith(">="):
+                    size_filter = self.parse_bytes(key.replace(">=", ""))
+                    self.matches = [self.matches[i] for i in range(n) if self.matches[i].bytes >= size_filter]
                 else:
-                    size_filter = self.parse_bytes(key2.replace(">", ""))
-                    self.matches = [prev_matches[i] for i in range(n) if prev_matches[i].bytes > size_filter]
-            elif key2.startswith("<"):
-                if key2.startswith("<="):
-                    size_filter = self.parse_bytes(key2.replace("<=", ""))
-                    self.matches = [prev_matches[i] for i in range(n) if prev_matches[i].bytes <= size_filter]
+                    size_filter = self.parse_bytes(key.replace(">", ""))
+                    self.matches = [self.matches[i] for i in range(n) if self.matches[i].bytes > size_filter]
+            elif key.startswith("<"):
+                if key.startswith("<="):
+                    size_filter = self.parse_bytes(key.replace("<=", ""))
+                    self.matches = [self.matches[i] for i in range(n) if self.matches[i].bytes <= size_filter]
                 else:
-                    size_filter = self.parse_bytes(key2.replace("<", ""))
-                    self.matches = [prev_matches[i] for i in range(n) if prev_matches[i].bytes < size_filter]
+                    size_filter = self.parse_bytes(key.replace("<", ""))
+                    self.matches = [self.matches[i] for i in range(n) if self.matches[i].bytes < size_filter]
+            
             # RegEx name search
-            elif key2.startswith("^"):
-                key2 = key2[1:]
-                self.matches = [prev_matches[i] for i in range(n) if prev_matches[i].path.startswith(key2)]
-            elif key2.endswith("$"):
-                key2 = key2[:-1]
-                self.matches = [prev_matches[i] for i in range(n) if prev_matches[i].path.endswith(key2)]
+            elif key.startswith("^"):
+                key = key[1:]
+                self.matches = [self.matches[i] for i in range(n) if self.matches[i].path.startswith(key)]
+            elif key.endswith("$"):
+                key = key[:-1]
+                self.matches = [self.matches[i] for i in range(n) if self.matches[i].path.endswith(key)]
+            
             # Case insensitive search
-            elif key2.startswith("%") and key2.endswith("%"):
-                key2 = key2[1:-2].lower()
-                self.matches = [prev_matches[i] for i in range(n) if key2 in self.matches[i].path.lower()]
+            elif key.startswith("%") and key.endswith("%"):
+                key = key[1:-2].lower()
+                self.matches = [self.matches[i] for i in range(n) if key in self.matches[i].path.lower()]
+            
             # Not in name search
-            elif key2.startswith("!"):
-                key2 = key2[1:]
-                self.matches = [prev_matches[i] for i in range(n) if key2 not in self.matches[i].path]
-            # Basename search
-            elif key2.startswith("basename: ") or key2.startswith("Basename: "):
-                key2 = key2[10:]
-                self.matches = [prev_matches[i] for i in range(n) if key2 in os.path.basename(self.matches[i].path)]
+            elif key.startswith("!"):
+                key = key[1:]
+                self.matches = [self.matches[i] for i in range(n) if key not in self.matches[i].path]
+                        
             # Full search
             else:
-                self.matches = [prev_matches[i] for i in range(n)
-                if key2 in prev_matches[i].path or key2 in prev_matches[i].size]
+                self.matches = [self.matches[i] for i in range(n)
+                if key in self.matches[i].path or key in self.matches[i].size]
 
         # Calculate the size of matches in bytes
         self.matches_bytes = 0
@@ -328,7 +291,7 @@ class Database:
                 data_rows.append([file.path.replace(self.location, "~"), file.bytes])
 
             with open(export_path, "w", encoding=self.encoding, newline="") as fp:
-                    csv_writer = csv.writer(fp)
+                    csv_writer = csv.writer(fp, delimiter=";")
                     csv_writer.writerow(metadata_row)
                     csv_writer.writerows(data_rows)
 
@@ -372,11 +335,11 @@ class Database:
         try:
 
             with open(filepath, "r", encoding=self.encoding) as fp:
-                csv_reader = csv.reader(fp)
+                csv_reader = csv.reader(fp, delimiter=";")
                 self.matches.clear()
                                 
                 # Parsing metadata from the first row
-                metadata = fp.readline().rstrip("\n").split(",")
+                metadata = fp.readline().rstrip("\n").split(";")
                 # Note: .readline() counts as a file iteration. no next(csv_reader) is redundant
                 self.location = metadata[0]
                 self.date = metadata[1]
