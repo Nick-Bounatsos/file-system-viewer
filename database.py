@@ -1,98 +1,88 @@
 import pymongo
-import datetime
-import time
-import operator
-import csv
-import os
 import pandas as pd
 import matplotlib.pyplot as plt
-
-
-class File:
-    """Class that holds each file data."""
-
-    def __init__(self, path: str, bytes: int, size: str):
-        self.path = path
-        self.bytes = bytes
-        self.size = size
+import subprocess
+import threading
+import datetime
+import time
+import os
 
 
 class Database:
     """Class that behaves like a database.
-    Holds the data. Saves them, loads them, gathers new ones, sorts them,
-    searches in them, plots them, imports external ones.
-    The data is saved in a list, as File objects, and when asked, a list of matches is returned.
-    The data itself doesn't change in the database, a copy is saved in self.matches.
-    This copy is then being sorted or searched within.
-    Apart from the data, some metadata is also saved (location, total bytes/size, process time)
-    Default encoding: utf-8
-    """
-    host = "127.0.0.1"
-    port = 27017
+    Loads the data from MongoDB. Gathers and stores new ones. Sorts them, searches in them, exports them as different
+    file types or as a mongodump, import an external mongodump.
+    The data is saved as a pandas.DataFrame.
+    The data itself doesn't change in the database, a copy is saved in self.matches to be processed.
+    Apart from the data, some metadata about the gather session is also saved.
+    Default encoding: utf-8"""
+    
     encoding = "utf-8"
     date_format = "%d-%b-%Y"
+    conn_path = "mongodb://127.0.0.1:27017"
 
 
     def __init__(self) -> None:
 
-        # metadata
-        self.location = ""
-        self.date = ""
-        self.time = ""
-        self.total_files = 0
-        self.total_bytes = 0
+        # Metadata
+        self.metadata = {
+            "location": "",
+            "date": "",
+            "time": "",
+            "total_files": 0,
+            "total_bytes": 0
+        }
 
-        # data and data related variables
+        # Data
+        self.data = pd.DataFrame({"path": [], "bytes": [], "size": []}) # self.data is stored and only accessed
+        self.matches = self.data.copy() # self.matches is the one being processed (sorted, searched)
+
+        # Data related attributes
         self.total_size = ""
-        self.data = () # data is saved here as a tuple, and never touched again, only accessed
-        self.matches = [] # this is a list of the data, and it's the one being processed (sorted, searched)
         self.matches_bytes = 0
         self.sorted = None
 
 
-    def save_data(self) -> None:
+    def store_data(self) -> None:
         """Stores metadata and data to a MongoDB database.
-        Opens and closes the connection at the end."""
+        The full path is saved in the database. And it is shortened when loaded into memory.
+        Opens and closes the connection at the end.
+        This method is calle in a thread. When it finishes, it prints to stdout to avoid errors."""
 
-        conn = pymongo.MongoClient(f"mongodb://{self.host}:{self.port}")
+        # Data preparation
+        data_rows = []
+        for i in range(self.metadata["total_files"]):
+            data_rows.append({
+                "path": self.data.iloc[i]["path"].replace("~", self.metadata["location"]),
+                "bytes": int(self.data.iloc[i]["bytes"]) # np.int64 cannot be encoded by mongodb, so cast it to int
+                })
+        
+        # Opening a connection to save the metadata/data
+        conn = pymongo.MongoClient(self.conn_path)
         mydb = conn["fsv"]
 
         metadata_col = mydb["metadata"]
         data_col = mydb["data"]
         
-        metadata = {
-            "location" : self.location,
-            "date" : self.date,
-            "time" : self.time,
-            "total_files" : self.total_files,
-            "total_bytes" : self.total_bytes
-        }
-
-        # Delete old and insert new metadata
+        # Delete old and insert new metadata/data
         # Metadata isn't updated because this way errors can be avoided with future changes
         metadata_col.delete_many({})
-        metadata_col.insert_one(metadata)
-        
-
-        data_rows = []
-        for file in self.data:
-            data_rows.append({
-                "path": file.path.replace(self.location, "~"),
-                "bytes": file.bytes})
-
-        # Delete old and insert new data
         data_col.delete_many({})
+
+        metadata_col.insert_one(self.metadata)
         data_col.insert_many(data_rows)
 
         conn.close()
+        print("Thread closed. Data stored successfully!")
 
 
     def load_data(self) -> None:
         """Parses metadata and data from a MongoDB database.
+        The path is shortened when parsed. self.metadata["location"] is replaced by "~".
         Opens and closes the connection at the end."""
 
         # Opening mongodb connection, reading data and closing it
-        conn = pymongo.MongoClient(f"mongodb://{self.host}:{self.port}")
+        conn = pymongo.MongoClient(self.conn_path)
         mydb = conn["fsv"]
 
         metadata_col = mydb["metadata"]
@@ -104,39 +94,48 @@ class Database:
         conn.close()
 
         # Metadata/Data parsing
-        self.location = metadata["location"]
-        self.date = metadata["date"]
-        self.time = metadata["time"]
-        self.total_files = metadata["total_files"]
-        self.total_bytes = metadata["total_bytes"]
+        try:
+            self.metadata["location"] = metadata["location"]
+            self.metadata["date"] = metadata["date"]
+            self.metadata["time"] = metadata["time"]
+            self.metadata["total_files"] = metadata["total_files"]
+            self.metadata["total_bytes"] = metadata["total_bytes"]
 
-        for row in data:
-            filepath = row["path"]
-            bytesize = row["bytes"]
-            self.matches.append(File(filepath, bytesize, self.format_bytes(bytesize)))
+            _data_dict = {"path": [], "bytes": [], "size": []}
 
-        self.data = tuple(self.matches)
+            for row in data:
+                filepath = row["path"].replace(self.metadata["location"], "~")
+                bytesize = row["bytes"]
 
-        return bool(self.matches)
+                _data_dict["path"].append(filepath)
+                _data_dict["bytes"].append(bytesize)
+                _data_dict["size"].append(self.format_bytes(bytesize))
+
+            self.matches = pd.DataFrame(_data_dict)
+            self.data = self.matches.copy()
+        except TypeError:
+            # Raised when the database is empty
+            return False
+
+        return True
 
 
     def gather_data(self, dirpath: str) -> None:
-        """Walks the path given to the end, gathers and loads self.matches with new data.
-        When the process ends, casts the self.matches to tuple (self.data)
-        Gathers new metadata and saves all of them.
-        Ignores FileNotFoundError and PermissionError.
-        Final data saved as:
-        ( File(), File(), ... )"""
+        """Walks the path given to the end, gathers and stores new data in a temporary dictionary.
+        When the process ends, converts and saves the data as a DataFrame (Both self.data and self.matches)
+        Gathers new metadata and calls self.store_data().
+        Ignores FileNotFoundError and PermissionError."""
 
         def format_process_time(process_time: int) -> str:
-            """self.time is formatted and saved as a string."""
+            """self.metadata["time"] is formatted and saved as a string."""
             m, s = divmod(process_time, 60)
             s = round(s, 2)
             return f"{s} s" if not m else f"{int(m)}m {s}s"
         
-        self.matches.clear()
-        self.total_bytes = 0
         self.sorted = None
+        self.metadata["total_bytes"] = 0
+
+        _data_dict = {"path": [], "bytes": [], "size": []}
 
         # Gather new data
         ti = time.perf_counter()
@@ -144,40 +143,43 @@ class Database:
             for file in files:
                 try:
                     filepath = os.path.join(path, file)
-
-                    # Files with semicolon are ignored, because it's used as a csv delimiter
-                    if ";" in filepath:
-                        continue
-
                     bytesize = os.path.getsize(filepath)
-                    self.total_bytes += bytesize
-                    self.matches.append(File(filepath.replace(dirpath, "~"), bytesize, self.format_bytes(bytesize)))
+                    self.metadata["total_bytes"] += bytesize
+                    _data_dict["path"].append(filepath.replace(dirpath, "~"))
+                    _data_dict["bytes"].append(bytesize)
+                    _data_dict["size"].append(self.format_bytes(bytesize))
                 except FileNotFoundError:
                     continue
                 except PermissionError:
                     continue
-        self.data = tuple(self.matches)
+
+        self.matches = pd.DataFrame(_data_dict)
+        self.data = self.matches.copy()
+
+
         final_time = round(time.perf_counter() - ti, 2)
         
         # Gather metadata
-        self.matches_bytes = self.total_bytes
-        self.location = dirpath
-        self.date = datetime.datetime.now().strftime(self.date_format)
-        self.time = format_process_time(final_time)
-        self.total_files = len(self.data)
-        self.total_size = self.format_bytes(self.total_bytes)
+        self.matches_bytes = self.metadata["total_bytes"]
+        self.metadata["location"] = dirpath
+        self.metadata["date"] = datetime.datetime.now().strftime(self.date_format)
+        self.metadata["time"] = format_process_time(final_time)
+        self.metadata["total_files"] = self.data.shape[0]
+        self.total_size = self.format_bytes(self.metadata["total_bytes"])
 
-        self.save_data()
+        # Saving data to MongoDB is time consuming. So it's done using a thread
+        threading.Thread(target=self.store_data).start()
+        print("Opening thread. Storing data to MongoDB. Do not interrupt...")
 
 
     @staticmethod
     def format_bytes(bytes: int) -> str:
         """Converts bytes to a readable string format."""
         
-        TB = 1_099_511_627_776  # 1 << 40 or 2 ** 40
-        GB = 1_073_741_824  # 1 << 30 or 2 ** 30
-        MB = 1_048_576  # 1 << 20 or 2 ** 20
-        KB = 1_024  # 1 << 10 or 2 ** 10
+        TB = 1_099_511_627_776
+        GB = 1_073_741_824
+        MB = 1_048_576
+        KB = 1_024
         
         if bytes / TB >= 1:
             return f"{round(bytes / TB, 3):.3f} TB"
@@ -215,11 +217,11 @@ class Database:
 
 
     def search(self, query: str) -> None:
-        """Performs linear search, updates self.matches and their size.
+        """Performs linear search, updates self.matches and self.matches_bytes.
         query is broken down to its' keys (if there are multiple)."""
         self.sorted = None
-        self.matches = list(self.data)
-        self.matches_bytes = self.total_bytes
+        self.matches = self.data.copy()
+        self.matches_bytes = self.metadata["total_bytes"]
         
         if not query:
             return
@@ -227,184 +229,134 @@ class Database:
         queries = query.split(" && ")
 
         for key in queries:
-            n = len(self.matches) - 1
             
             # Filtered size search
             if key.startswith(">"):
                 if key.startswith(">="):
-                    size_filter = self.parse_bytes(key.replace(">=", ""))
-                    self.matches = [self.matches[i] for i in range(n) if self.matches[i].bytes >= size_filter]
+                    size_filter = self.parse_bytes(key[2:])
+                    self.matches = self.matches.loc[self.matches["bytes"] >= size_filter]
                 else:
-                    size_filter = self.parse_bytes(key.replace(">", ""))
-                    self.matches = [self.matches[i] for i in range(n) if self.matches[i].bytes > size_filter]
+                    size_filter = self.parse_bytes(key[1:])
+                    self.matches = self.matches.loc[self.matches["bytes"] > size_filter]
             elif key.startswith("<"):
                 if key.startswith("<="):
-                    size_filter = self.parse_bytes(key.replace("<=", ""))
-                    self.matches = [self.matches[i] for i in range(n) if self.matches[i].bytes <= size_filter]
+                    size_filter = self.parse_bytes(key[2:])
+                    self.matches = self.matches.loc[self.matches["bytes"] <= size_filter]
                 else:
-                    size_filter = self.parse_bytes(key.replace("<", ""))
-                    self.matches = [self.matches[i] for i in range(n) if self.matches[i].bytes < size_filter]
+                    size_filter = self.parse_bytes(key[1:])
+                    self.matches = self.matches.loc[self.matches["bytes"] < size_filter]
             
             # RegEx name search
             elif key.startswith("^"):
                 key = key[1:]
-                self.matches = [self.matches[i] for i in range(n) if self.matches[i].path.startswith(key)]
+                self.matches = self.matches.loc[self.matches["path"].str.startswith(key)]
             elif key.endswith("$"):
                 key = key[:-1]
-                self.matches = [self.matches[i] for i in range(n) if self.matches[i].path.endswith(key)]
+                self.matches = self.matches.loc[self.matches["path"].str.endswith(key)]
             
             # Case insensitive search
             elif key.startswith("%") and key.endswith("%"):
-                key = key[1:-2].lower()
-                self.matches = [self.matches[i] for i in range(n) if key in self.matches[i].path.lower()]
+                key = key[1:-2]
+                self.matches = self.matches.loc[self.matches["path"].str.contains(key, case=False)]
             
             # Not in name search
             elif key.startswith("!"):
                 key = key[1:]
-                self.matches = [self.matches[i] for i in range(n) if key not in self.matches[i].path]
+                self.matches = self.matches.loc[~self.matches["path"].str.contains(key)]
                         
             # Full search
             else:
-                self.matches = [self.matches[i] for i in range(n)
-                if key in self.matches[i].path or key in self.matches[i].size]
+                self.matches = self.matches.loc[self.matches["path"].str.contains(key)]
 
         # Calculate the size of matches in bytes
-        self.matches_bytes = 0
-        for match in self.matches:
-            self.matches_bytes += match.bytes
+        self.matches_bytes = self.matches["bytes"].sum()
 
 
     def export_as(self, kind: str) -> None:
-        """Exports the data as <kind>.
-        @kind values: csv text excel"""
-
-        # TODO: Exporting as a mongodb to be loaded directly??
-        # mongoexport --db=fsv --collection=metadata --out=metadata.json
-        # mongoexport --db=fsv --collection=data --out=data.json
+        """Exports the data as @kind.
+        @kind: database/excel/csv/json/html/text"""
 
         if not os.path.exists("Exports"):
             os.mkdir("Exports")
 
-        # Extensionless name
-        _loc = self.location.replace(os.path.sep, "_")
+        # Extensionless name. The correct extension is added later
+        _loc = self.metadata["location"].replace(os.path.sep, "_")
         _date = datetime.datetime.now().strftime(self.date_format)
-        export_path = os.path.join("Exports", f"Export {_loc}_{_date}")
+        export_path = os.path.join("Exports", f"Export {_loc} {_date}")
         
-        if kind == "text":
-            export_path += ".txt"
-            with open(export_path, "w", encoding=self.encoding) as fp:
-                fp.write(f"{self.date}\n")
-                fp.write(f"~ = {self.location}\n")
-                fp.write(f"Process time: {self.time}\n")
-                fp.write(f"Total files: {self.total_files}\n")
-                fp.write(f"Total size: {self.total_size}\n\n")
-                for file in self.data:
-                    fp.write(f"{file.size}{' ' * 8}{file.path}\n")
+        if kind == "database":
+            # Export the whole database
+            export_path = os.path.join("Exports", f"MongoDump {_date}")
+            subprocess.run(["mongodump", "--db=fsv", f"--out={export_path}"])
+        
+        elif kind == "excel":
+            export_path += ".xlsx"
 
+            df = self.data.copy()
+            df.columns = [f"Path (~ = {self.metadata['location']})", "Bytes", "Size"]
+            df.to_excel(export_path, 
+                        sheet_name=f"{os.path.basename(self.metadata['location'])} - {self.metadata['date']}",
+                        index=False)
+        
         elif kind == "csv":
             export_path += ".csv"
             
-            metadata_row = [self.location, self.date, self.time, self.total_files, self.total_bytes]
-            data_rows = []
-            for file in self.data:
-                data_rows.append([file.path.replace(self.location, "~"), file.bytes])
-
             with open(export_path, "w", encoding=self.encoding, newline="") as fp:
-                    csv_writer = csv.writer(fp, delimiter=";")
-                    csv_writer.writerow(metadata_row)
-                    csv_writer.writerows(data_rows)
-
-        elif kind == "excel":
-            export_path += ".xlsx"
-            # Convert the data to a dictionary, and then to a pandas.DataFrame, then export as excel.
-            excel_data_dict = {
-                "path": [],
-                "bytes": [],
-                "size": []
-                }
-            for file in self.data:
-                excel_data_dict["path"].append(file.path)
-                excel_data_dict["bytes"].append(file.bytes)
-                excel_data_dict["size"].append(file.size)
-
-            df = pd.DataFrame(excel_data_dict)
-            df.columns = [f"Path ({self.location})", "Bytes", "Size"]
-            df.to_excel(export_path, sheet_name=f"{os.path.basename(self.location)} - {self.date}", index=False)
-
-
-    def import_data(self, filepath: str) -> bool:
-        """Import data/metadata saved in .csv format.
-        The format is:
-            1st line:   location;date;time;total_files;total_bytes
-            Next lines: path;bytes
+                fp.write(";".join([str(value) for value in self.metadata.values()]) + "\n")
+            self.matches.to_csv(export_path, mode="a", sep=";", index=False, header=False)
         
-        Returns True/False depending on the success of the process."""
+        elif kind == "json":
+            export_path += ".json"
+            self.matches.to_json(export_path, indent=4)
+
+        elif kind == "html":
+            export_path += ".html"
+            self.matches.to_html(export_path)
+
+        elif kind == "text":
+            export_path += ".txt"
+            with open(export_path, "w", encoding=self.encoding) as fp:
+                fp.write(f"{self.metadata['date']}\n")
+                fp.write(f"~ = {self.metadata['location']}\n")
+                fp.write(f"Process time: {self.metadata['time']}\n")
+                fp.write(f"Total files: {self.metadata['total_files']}\n")
+                fp.write(f"Total size: {self.total_size}\n\n")
+                for i in range(self.metadata["total_files"]):
+                    fp.write(f"""{self.data.iloc[i]["size"]}{" " * 8}{self.data.iloc[i]["path"]}\n""")
+
+
+    def import_data(self, dirpath: str) -> bool:
+        """Drop the old database and import data/metadata from a mongodump."""
+
+        successful = not bool(subprocess.run(["mongorestore", f"--db=fsv", "--drop", dirpath], capture_output=True).returncode)
+        if successful:
+            self.load_data()
+        return successful
+
+
+    def sort_by(self, attr: str) -> None:
+        """Sorts matches by @attr. If matches aren't sorted, sorts ascending first, otherwise descending."""
+
+        if attr == "size":
+            if self.sorted == "size/asc":
+                self.matches.sort_values(by=["bytes", "path"], ascending=[False, False], inplace=True)
+                self.sorted = "size/desc"
+            else:
+                self.matches.sort_values(by=["bytes", "path"], ascending=[True, True], inplace=True)
+                self.sorted = "size/asc"
         
-        try:
-
-            with open(filepath, "r", encoding=self.encoding) as fp:
-                csv_reader = csv.reader(fp, delimiter=";")
-                self.matches.clear()
-                                
-                # Parsing metadata from the first row
-                metadata = fp.readline().rstrip("\n").split(";")
-                # Note: .readline() counts as a file iteration. no next(csv_reader) is redundant
-                self.location = metadata[0]
-                self.date = metadata[1]
-                self.time = metadata[2]
-                self.total_files = int(metadata[3])
-                self.total_bytes = int(metadata[4])
-
-                # Parsing data
-                for row in csv_reader:
-                    # filepath = row[0].replace("~", self.location) # expanding ~
-                    filepath = row[0]
-                    bytesize = int(row[1])
-                    self.matches.append(File(filepath, bytesize, self.format_bytes(bytesize)))
-            self.data = tuple(self.matches)
-            
-            return True
-        except FileNotFoundError:
-            return False
-        except ValueError:
-            return False
-
-
-    def sort_by_size(self) -> None:
-        """Sorts matches by size. If matches aren't sorted, sorts ascending first, otherwise descending.
-        If the data is already sorted, then it reverses it."""
-
-        if self.sorted == "size/asc":
-            self.matches.reverse()
-            self.sorted = "size/desc"
-        else:
-            if self.sorted == "size/desc":
-                self.matches.reverse()
+        elif attr == "name":
+            if self.sorted == "name/asc":
+                self.matches.sort_values(by=["path", "bytes"], ascending=[False, False], inplace=True)
+                self.sorted = "name/desc"
             else:
-                self.matches.sort(key=operator.attrgetter("bytes", "path"))
-            self.sorted = "size/asc"
-
-
-    def sort_by_name(self) -> None:
-        """Sorts matches by name. If matches aren't sorted, sorts ascending first, otherwise descending.
-        If the data is already sorted, then it reverses it."""
-
-        if self.sorted == "name/asc":
-            self.matches.reverse()
-            self.sorted = "name/desc"
-        else:
-            if self.sorted == "name/desc":
-                self.matches.reverse()
-            else:
-                self.matches.sort(key=operator.attrgetter("path", "bytes"))
-            self.sorted = "name/asc"
+                self.matches.sort_values(by=["path", "bytes"], ascending=[True, True], inplace=True)
+                self.sorted = "name/asc"
 
 
     def plot_data(self):
         """Creates a size histogram of self.data.
-        This is done manually and plotted as barchart due to the byte scale difference."""
-        if len(self.matches) < 2: # Plotting just one value is obsolete and raises a DivisionByZeroError
-            return
+        The histogram is done manually and plotted as a barchart due to the byte scale difference."""
         
         def insert_labels(bars) -> None:
             """Insert a text label above each bar in the barchart given."""
@@ -413,40 +365,37 @@ class Database:
                 plt.annotate(f"{height:,}", xy=(bar.get_x() + bar.get_width() / 2, height),
                             xytext=(0, 3), textcoords="offset points", ha="center", va="bottom")
 
-        bytesizes = [file.bytes for file in self.data]
         
         x_axis = ["0b - 0.5Kb", "0.5Kb - 1Kb",
                 "1Kb - 0.5Mb", "0.5Mb - 1Mb",
                 "1Mb - 0.5Gb", "0.5Gb - 1Gb", ">1Gb"]
+        y_axis = [0 for _ in range(7)] # Filled later
 
-        # The 7 groups and their bytesize filters
-        g1 = g2 = g3 = g4 = g5 = g6 = g7 = 0
-        g2_filter = 1024
-        g1_filter = g2_filter // 2
+        # The 6 bytesize filters
+        KB = 1024
+        MB = 1024 ** 2
+        GB = 1024 ** 3
+        half_KB = KB // 2
+        half_MB = MB // 2
+        half_GB = GB // 2
 
-        g4_filter = 1024 ** 2
-        g3_filter = g4_filter // 2
-
-        g6_filter = 1024 ** 3
-        g5_filter = g6_filter // 2
-        
+        bytesizes = self.data["bytes"]
         for bytesize in bytesizes:
-            if bytesize < g1_filter:
-                g1 += 1
-            elif bytesize < g2_filter:
-                g2 += 1
-            elif bytesize < g3_filter:
-                g3 += 1
-            elif bytesize < g4_filter:
-                g4 += 1
-            elif bytesize < g5_filter:
-                g5 += 1
-            elif bytesize < g6_filter:
-                g6 += 1
+            if bytesize < half_KB:
+                y_axis[0] += 1
+            elif bytesize < KB:
+                y_axis[1] += 1
+            elif bytesize < half_MB:
+                y_axis[2] += 1
+            elif bytesize < MB:
+                y_axis[3] += 1
+            elif bytesize < half_GB:
+                y_axis[4] += 1
+            elif bytesize < GB:
+                y_axis[5] += 1
             else:
-                g7 += 1
+                y_axis[6] += 1
         
-        y_axis = [g1, g2, g3, g4, g5, g6, g7]
         
         plt.grid(which="major", axis="y", linestyle=":", zorder=0)
         bars = plt.bar(x_axis, y_axis, color="royalblue", edgecolor="black", zorder=3)
@@ -459,18 +408,22 @@ class Database:
 
 
     def get_data(self) -> tuple:
-        """Returns (matches, matches_size)."""
+        """Returns (self.matches, self.matches_size)."""
         return self.matches, self.format_bytes(self.matches_bytes)
 
 
-    def get_metadata(self) -> tuple:
-        """Returns (location, date, time, total_files, total_size)"""
-        self.total_size = self.format_bytes(self.total_bytes)
-        return self.location, self.date, self.time, self.total_files, self.total_size
+    def get_printable_metadata(self) -> tuple:
+        """Returns metadata. Except total_bytes, which is returned formatted."""
+        printable_metadata = (self.metadata["location"],
+                            self.metadata["date"],
+                            self.metadata["time"],
+                            self.metadata["total_files"],
+                            self.format_bytes(self.metadata["total_bytes"]))
+        return printable_metadata
 
 
     def is_sliced(self) -> bool:
         """Boolean function that compares matches with the data.
         If True, then display search output. If not, then clear.
         If self.matches is slice of self.data, then a search has taken place, so search info must be displayed."""
-        return len(self.matches) != self.total_files
+        return self.matches.shape[0] != self.metadata["total_files"]

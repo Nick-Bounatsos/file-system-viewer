@@ -3,7 +3,7 @@ import gui
 
 app = gui.QtWidgets.QApplication(gui.sys.argv)
 db = database.Database()
-win = gui.MainWindow(db)
+win = gui.MainWindow(app, db)
 
 win.show()
 

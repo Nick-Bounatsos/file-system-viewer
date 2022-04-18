@@ -1,19 +1,22 @@
 from PyQt5 import QtCore, QtGui, QtWidgets
-import webbrowser
+import pandas as pd
 import subprocess
+import webbrowser
 import sys
 import os
 
 
 class MainWindow(QtWidgets.QMainWindow):
 
-    def __init__(self, database: object) -> None:
+    def __init__(self, app: object, database: object) -> None:
         """Setup the UI, connect to the database and add event listeners."""
         super(MainWindow, self).__init__()
+
+        self.app_name = "File System Viewer"
         self.database = database
-
         self.limit = 1000
-
+        
+        app.setApplicationName(self.app_name)
         self.setup_interface()
 
         # Load previous data, if they exist
@@ -30,7 +33,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.setFont(FONT)
         
         # Window size/name customization
-        self.setWindowTitle("Database")
+        self.setWindowTitle(self.app_name)
         self.setMinimumSize(820, 480)
         self.showMaximized()
 
@@ -108,12 +111,12 @@ class MainWindow(QtWidgets.QMainWindow):
         self.size_button = QtWidgets.QPushButton(self.sortButtonsWidget)
         self.size_button.setFixedWidth(SIZE_BTN_W)
         self.size_button.setText("Size")
-        self.size_button.clicked.connect(self.sort_by_size)
+        self.size_button.clicked.connect(lambda: self.sort_by("size"))
         
         # Path Button. Will be accessed, so that the text changes depending on sorting
         self.path_button = QtWidgets.QPushButton(self.sortButtonsWidget)
         self.path_button.setText("Path")
-        self.path_button.clicked.connect(self.sort_by_name)
+        self.path_button.clicked.connect(lambda: self.sort_by("name"))
 
         self.sortButtonsLayout.addWidget(self.size_button)
         self.sortButtonsLayout.addWidget(self.path_button)
@@ -121,7 +124,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         # Main screen area, data will be displayed here
         self.screen = QtWidgets.QListWidget(self.centralwidget)
-        self.screen.itemDoubleClicked.connect(self.open_directory)
+        self.screen.itemDoubleClicked.connect(self.open_parent_directory)
 
         
         # Scrollbars
@@ -181,18 +184,29 @@ class MainWindow(QtWidgets.QMainWindow):
         self.menuExport_As = QtWidgets.QMenu(self)
         self.menuExport_As.setTitle("Export As...")
 
-        self.action_txt = QtWidgets.QAction(self)
-        self.action_txt.setText(".txt")
-        self.action_txt.triggered.connect(lambda: self.database.export_as("text"))
-        
-        self.action_csv = QtWidgets.QAction(self)
-        self.action_csv.setText(".csv")
-        self.action_csv.triggered.connect(lambda: self.database.export_as("csv"))
+        self.action_database = QtWidgets.QAction(self)
+        self.action_database.setText("Database (MongoDB)")
+        self.action_database.triggered.connect(lambda: self.database.export_as("database"))
         
         self.action_xlsx = QtWidgets.QAction(self)
-        self.action_xlsx.setText(".xlsx")
+        self.action_xlsx.setText("Excel File")
         self.action_xlsx.triggered.connect(lambda: self.database.export_as("excel"))
         
+        self.action_csv = QtWidgets.QAction(self)
+        self.action_csv.setText("CSV File")
+        self.action_csv.triggered.connect(lambda: self.database.export_as("csv"))
+        
+        self.action_json = QtWidgets.QAction(self)
+        self.action_json.setText("JSON File")
+        self.action_json.triggered.connect(lambda: self.database.export_as("json"))
+
+        self.action_html = QtWidgets.QAction(self)
+        self.action_html.setText("HTML Table")
+        self.action_html.triggered.connect(lambda: self.database.export_as("html"))
+
+        self.action_txt = QtWidgets.QAction(self)
+        self.action_txt.setText("Text File")
+        self.action_txt.triggered.connect(lambda: self.database.export_as("text"))
         
         # Import
         self.actionImport = QtWidgets.QAction(self)
@@ -244,9 +258,12 @@ class MainWindow(QtWidgets.QMainWindow):
         # Widget packing process (Menubar)
 
         # Adding exporting categories to Export As
-        self.menuExport_As.addAction(self.action_txt)
-        self.menuExport_As.addAction(self.action_csv)
+        self.menuExport_As.addAction(self.action_database)
         self.menuExport_As.addAction(self.action_xlsx)
+        self.menuExport_As.addAction(self.action_csv)
+        self.menuExport_As.addAction(self.action_json)
+        self.menuExport_As.addAction(self.action_html)
+        self.menuExport_As.addAction(self.action_txt)
 
         # Adding File categories to File
         self.menuFile.addAction(self.actionGather_Data)
@@ -295,7 +312,7 @@ class MainWindow(QtWidgets.QMainWindow):
         """Update data action (menubar). Get location from metadata, and call database gather data method
         with the location as dirpath. Then print the new data."""
 
-        location = self.database.get_metadata()[0]
+        location = self.database.metadata["location"]
         self.database.gather_data(location)
 
         self.print_data()
@@ -310,49 +327,39 @@ class MainWindow(QtWidgets.QMainWindow):
         self.print_data()
 
 
-    def sort_by_size(self) -> None:
-        """Sort by size using the database method, and print the data."""
-        self.database.sort_by_size()
+    def sort_by(self, attr: str) -> None:
+        """Sort by @attr using the database method, and print the data."""
+        self.database.sort_by(attr)
         self.print_data()
 
 
-    def sort_by_name(self) -> None:
-        """Sort by name using the database method, and print the data."""
-        self.database.sort_by_name()
-        self.print_data()
-
-
-    def open_directory(self) -> None:
-        """Triggered whenever an item is double clicked.
-        Check from the metadata, if the dataset is imported. If it is, do nothing.
-        If it's a local file, open its' directory."""
-        
-        location = self.database.get_metadata()[0]
-        if location.startswith("Imported"):
-            return
+    def open_parent_directory(self) -> None:
+        """Triggered whenever an item is double clicked. Get the items' filepath.
+        If its' parent directory exists open it (os independent)."""
         
         item_selected = self.screen.currentItem().text()
 
+        location = self.database.metadata["location"]
         # The following line ensures that double clicking will work whether the filepath is expanded or not
         _delimiter = "~" if "~" in item_selected else location
         filepath = location + item_selected.split(_delimiter)[-1]
+        parent_directory = filepath.rstrip(filepath.split(os.sep)[-1])
 
-        if os.path.exists(filepath):
-            item_directory = filepath.rstrip(filepath.split(os.sep)[-1])
+        if os.path.exists(parent_directory):
             
             if sys.platform.startswith("win"):
-                os.startfile(item_directory)
+                os.startfile(parent_directory)
             elif sys.platform.startswith("linux"):
-                subprocess.run(["xdg-open", item_directory])
-            else:
-                subprocess.run(["open", item_directory])
+                subprocess.run(["xdg-open", parent_directory])
+            elif sys.platform.startswith("darwin"):
+                subprocess.run(["open", parent_directory])
 
 
     def set_limit(self, new_limit: int) -> None:
         """Set self.limit (Limit of rows per page)."""
         
         if new_limit == -1:
-            new_limit = self.database.get_metadata()[3]
+            new_limit = self.database.metadata["total_files"]
 
         if new_limit == self.limit:
             return
@@ -364,28 +371,26 @@ class MainWindow(QtWidgets.QMainWindow):
 
 
     def print_data(self) -> None:
-        """Gets the data and prints them on screen. If data is empty, prints respective message.
-        Calls self.update_sort_buttons() method"""
-
+        """Gets the data and prints them on screen. Calls self.update_sort_buttons() method."""
+        
         self.screen.clear()
         self.search_info.clear()
 
-        data, size = self.database.get_data()
+        # Get the data from the database
+        _data, size = self.database.get_data()
+        data = pd.DataFrame(_data)
 
         # This boolean function determines whether search info must be displayed
         # if the matches are the same as the data, this means no search occured, so no reason to display info
         if self.database.is_sliced():
-            self.search_info.setText(f"{len(data):,} files ({size})")
+            self.search_info.setText(f"{data.shape[0]:,} files ({size})")
 
-        if data:
+
+        length = data.shape[0]
+        stop = length if length < self.limit else self.limit
             
-            length = len(data)
-            stop = length if length < self.limit else self.limit
-            
-            for i in range(stop):
-                self.screen.addItem(f"{f'{data[i].size:>10}':^31}{data[i].path}")
-        else:
-            self.screen.addItem("No files found.")
+        for i in range(stop):
+            self.screen.addItem(f"""{f'{data.iloc[i]["size"]:>10}':^31}{data.iloc[i]["path"]}""")
 
         self.update_sort_buttons()
 
@@ -393,8 +398,8 @@ class MainWindow(QtWidgets.QMainWindow):
     def print_metadata(self) -> None:
         """Gets metadata from the database and updates the respective widgets"""
 
-        location, date, time, total_files, total_size = self.database.get_metadata()
-        self.setWindowTitle(f"Database - {location}")
+        location, date, time, total_files, total_size = self.database.get_printable_metadata()
+        self.setWindowTitle(f"File System Viewer - {location}")
         self.date_label.setText(f" Date: {date}")
         self.proc_time_label.setText(f" | Process time: {time}")
         self.files_label.setText(f" | Files: {total_files:,}")
@@ -402,7 +407,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
 
     def update_sort_buttons(self) -> None:
-        """Gets the self.database.sorted attr, and properly updates the buttons.
+        """Gets the self.database.sorted attribute, and properly updates the sorting buttons.
         This method is called from self.print_data().
         Whenever a change has happened, either a new search, a new sort, or gather/update,
         data is printed on screen."""
@@ -427,10 +432,11 @@ class MainWindow(QtWidgets.QMainWindow):
 
 
     def import_data(self) -> None:
-        """Asks for filepath (askopenfile) and calls the datbase import method."""
+        """Asks for dirpath (askopendir) and calls the database import method."""
 
-        filepath = QtWidgets.QFileDialog.getOpenFileName(self, "QFileDialog.getOpenFileName()", "", "CSV files (*.csv)")[0]
-        if self.database.import_data(filepath):
+        # askopendir. If it's cancelled, returns an empty string. The path returns has / as sep, regardless of os
+        dirpath = str(QtWidgets.QFileDialog.getExistingDirectory(self, "Select Directory")).replace("/", os.sep)
+        if self.database.import_data(dirpath):
             self.print_data()
             self.print_metadata()
 
