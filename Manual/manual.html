@@ -1,86 +1,1847 @@
 <!DOCTYPE html>
-<html lang="en" style="font-size: 16px;">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Database</title>
-        <link rel="shortcut icon" type="image/x-icon" href="../Images/database.png" />
-        <link rel="stylesheet" href="style.css">
-    </head>
-    <body>
-        <h1 style="text-align: center;">Database General Manual</h1>
-        <hr>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-        <div id="info" style="text-align: center;">
-            <h2><i>Database</i></h2>
-            <p>Database gathers file data from your system and displays them on screen</p>
+    <title>File System Viewer — Manual</title>
+
+    <link
+        rel="shortcut icon"
+        type="image/x-icon"
+        href="../Images/database.png"
+    >
+
+    <style>
+        /* =========================================================
+           THEME
+           ========================================================= */
+
+        :root {
+            --bg: #f4f6f8;
+            --surface: #ffffff;
+            --surface-secondary: #f8fafc;
+            --surface-hover: #eef2f6;
+
+            --text: #1d2939;
+            --text-secondary: #667085;
+            --text-muted: #98a2b3;
+
+            --border: #dfe3e8;
+
+            --primary: #3478f6;
+            --primary-hover: #2868dc;
+            --primary-soft: #eaf2ff;
+
+            --success: #16835b;
+            --success-soft: #eaf8f2;
+
+            --warning: #b56608;
+            --warning-soft: #fff7e8;
+
+            --code-bg: #f1f4f8;
+            --code-text: #344054;
+
+            --shadow:
+                0 1px 2px rgba(16, 24, 40, 0.04),
+                0 4px 12px rgba(16, 24, 40, 0.04);
+
+            --sidebar-width: 270px;
+            --radius: 12px;
+        }
+
+        html[data-theme="dark"] {
+            --bg: #111827;
+            --surface: #182130;
+            --surface-secondary: #202b3b;
+            --surface-hover: #263244;
+
+            --text: #f1f5f9;
+            --text-secondary: #aab4c2;
+            --text-muted: #7d8998;
+
+            --border: #2f3a4b;
+
+            --primary: #60a5fa;
+            --primary-hover: #7db7fa;
+            --primary-soft: #1c3555;
+
+            --success: #5ed6a4;
+            --success-soft: #15372e;
+
+            --warning: #f0b35c;
+            --warning-soft: #3b2c16;
+
+            --code-bg: #111827;
+            --code-text: #dbe7f5;
+
+            --shadow:
+                0 1px 2px rgba(0, 0, 0, 0.25),
+                0 6px 18px rgba(0, 0, 0, 0.15);
+        }
+
+
+        /* =========================================================
+           RESET / BASE
+           ========================================================= */
+
+        * {
+            box-sizing: border-box;
+        }
+
+        html {
+            scroll-behavior: smooth;
+        }
+
+        body {
+            margin: 0;
+            background: var(--bg);
+            color: var(--text);
+
+            font-family:
+                "Segoe UI",
+                -apple-system,
+                BlinkMacSystemFont,
+                "Helvetica Neue",
+                Arial,
+                sans-serif;
+
+            font-size: 16px;
+            line-height: 1.65;
+
+            transition:
+                background-color 0.2s ease,
+                color 0.2s ease;
+        }
+
+        a {
+            color: var(--primary);
+            text-decoration: none;
+        }
+
+        a:hover {
+            text-decoration: underline;
+        }
+
+        code,
+        pre {
+            font-family:
+                "Cascadia Code",
+                "Consolas",
+                "Courier New",
+                monospace;
+        }
+
+        code {
+            background: var(--code-bg);
+            color: var(--code-text);
+            padding: 2px 6px;
+            border-radius: 5px;
+            font-size: 0.92em;
+        }
+
+
+        /* =========================================================
+           LAYOUT
+           ========================================================= */
+
+        .layout {
+            display: grid;
+            grid-template-columns: var(--sidebar-width) 1fr;
+            min-height: 100vh;
+        }
+
+        .sidebar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            bottom: 0;
+
+            width: var(--sidebar-width);
+
+            background: var(--surface);
+            border-right: 1px solid var(--border);
+
+            padding: 22px 18px;
+
+            overflow-y: auto;
+            z-index: 10;
+        }
+
+        .content {
+            grid-column: 2;
+
+            width: 100%;
+            max-width: 1180px;
+
+            padding: 48px 52px 80px;
+            margin: 0 auto;
+        }
+
+
+        /* =========================================================
+           SIDEBAR
+           ========================================================= */
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 11px;
+
+            padding: 0 8px 22px;
+            margin-bottom: 18px;
+
+            border-bottom: 1px solid var(--border);
+        }
+
+        .brand-icon {
+            width: 36px;
+            height: 36px;
+
+            border-radius: 8px;
+            object-fit: contain;
+        }
+
+        .brand-title {
+            font-size: 16px;
+            font-weight: 700;
+            line-height: 1.25;
+        }
+
+        .brand-subtitle {
+            color: var(--text-secondary);
+            font-size: 12px;
+            margin-top: 2px;
+        }
+
+        .nav-title {
+            margin: 20px 10px 8px;
+
+            color: var(--text-muted);
+
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+        }
+
+        .nav-link {
+            display: block;
+
+            padding: 9px 11px;
+            margin: 2px 0;
+
+            color: var(--text-secondary);
+
+            border-radius: 7px;
+
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .nav-link:hover {
+            color: var(--text);
+            background: var(--surface-hover);
+            text-decoration: none;
+        }
+
+        .sidebar-footer {
+            margin-top: 26px;
+            padding-top: 18px;
+
+            border-top: 1px solid var(--border);
+        }
+
+
+        /* =========================================================
+           BUTTONS
+           ========================================================= */
+
+        .button {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+
+            padding: 8px 13px;
+
+            border: 1px solid var(--border);
+            border-radius: 7px;
+
+            background: var(--surface-secondary);
+            color: var(--text);
+
+            font-family: inherit;
+            font-size: 13px;
+            font-weight: 600;
+
+            cursor: pointer;
+
+            transition:
+                background-color 0.15s ease,
+                border-color 0.15s ease;
+        }
+
+        .button:hover {
+            background: var(--surface-hover);
+        }
+
+        .theme-button {
+            width: 100%;
+        }
+
+
+        /* =========================================================
+           HERO
+           ========================================================= */
+
+        .hero {
+            margin-bottom: 34px;
+        }
+
+        .eyebrow {
+            color: var(--primary);
+
+            font-size: 13px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+
+            margin-bottom: 7px;
+        }
+
+        h1 {
+            margin: 0 0 10px;
+
+            font-size: clamp(32px, 5vw, 48px);
+            line-height: 1.12;
+            letter-spacing: -0.035em;
+        }
+
+        .hero-description {
+            max-width: 760px;
+
+            color: var(--text-secondary);
+
+            font-size: 18px;
+            line-height: 1.65;
+
+            margin: 0;
+        }
+
+
+        /* =========================================================
+           SECTION TYPOGRAPHY
+           ========================================================= */
+
+        section {
+            scroll-margin-top: 30px;
+            margin-top: 52px;
+        }
+
+        h2 {
+            margin: 0 0 18px;
+
+            font-size: 27px;
+            line-height: 1.25;
+            letter-spacing: -0.02em;
+        }
+
+        h3 {
+            margin: 26px 0 10px;
+
+            font-size: 19px;
+        }
+
+        p {
+            margin: 10px 0 16px;
+        }
+
+        .section-intro {
+            max-width: 800px;
+            color: var(--text-secondary);
+        }
+
+
+        /* =========================================================
+           CARDS
+           ========================================================= */
+
+        .grid {
+            display: grid;
+            grid-template-columns:
+                repeat(auto-fit, minmax(220px, 1fr));
+
+            gap: 14px;
+
+            margin: 22px 0;
+        }
+
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+
+            padding: 19px;
+
+            box-shadow: var(--shadow);
+        }
+
+        .card h3 {
+            margin: 0 0 7px;
+            font-size: 16px;
+        }
+
+        .card p {
+            margin: 0;
+            color: var(--text-secondary);
+            font-size: 14px;
+        }
+
+        .card-label {
+            display: inline-block;
+
+            margin-bottom: 9px;
+
+            color: var(--primary);
+
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+        }
+
+
+        /* =========================================================
+           FEATURE LIST
+           ========================================================= */
+
+        .feature-list {
+            display: grid;
+            gap: 10px;
+
+            padding: 0;
+            margin: 20px 0;
+
+            list-style: none;
+        }
+
+        .feature-list li {
+            position: relative;
+
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 9px;
+
+            padding: 13px 16px 13px 44px;
+        }
+
+        .feature-list li::before {
+            content: "✓";
+
+            position: absolute;
+            left: 16px;
+            top: 13px;
+
+            color: var(--success);
+            font-weight: 800;
+        }
+
+
+        /* =========================================================
+           TABLES
+           ========================================================= */
+
+        .table-wrapper {
+            overflow-x: auto;
+
+            margin: 20px 0;
+
+            background: var(--surface);
+
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+
+            box-shadow: var(--shadow);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            min-width: 650px;
+        }
+
+        th,
+        td {
+            padding: 13px 16px;
+            text-align: left;
+            vertical-align: top;
+
+            border-bottom: 1px solid var(--border);
+        }
+
+        th {
+            background: var(--surface-secondary);
+
+            color: var(--text-secondary);
+
+            font-size: 12px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+
+        tr:last-child td {
+            border-bottom: none;
+        }
+
+        tbody tr:hover {
+            background: var(--surface-secondary);
+        }
+
+
+        /* =========================================================
+           QUERY / CODE BOXES
+           ========================================================= */
+
+        .query {
+            display: block;
+
+            margin: 10px 0;
+            padding: 13px 15px;
+
+            background: var(--code-bg);
+            color: var(--code-text);
+
+            border: 1px solid var(--border);
+            border-radius: 8px;
+
+            font-size: 14px;
+
+            overflow-x: auto;
+        }
+
+        .example {
+            margin: 16px 0;
+            padding: 16px 18px;
+
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-left: 4px solid var(--primary);
+            border-radius: 8px;
+        }
+
+        .example-title {
+            margin-bottom: 7px;
+
+            font-size: 13px;
+            font-weight: 700;
+        }
+
+        .example p:last-child {
+            margin-bottom: 0;
+        }
+
+
+        /* =========================================================
+           NOTES
+           ========================================================= */
+
+        .note,
+        .warning {
+            margin: 20px 0;
+            padding: 16px 18px;
+
+            border-radius: 9px;
+        }
+
+        .note {
+            background: var(--primary-soft);
+            border: 1px solid color-mix(
+                in srgb,
+                var(--primary) 30%,
+                transparent
+            );
+        }
+
+        .warning {
+            background: var(--warning-soft);
+            border: 1px solid color-mix(
+                in srgb,
+                var(--warning) 35%,
+                transparent
+            );
+        }
+
+        .note strong,
+        .warning strong {
+            display: block;
+            margin-bottom: 4px;
+        }
+
+
+        /* =========================================================
+           KEYBOARD KEYS
+           ========================================================= */
+
+        kbd {
+            display: inline-block;
+
+            min-width: 24px;
+
+            padding: 3px 7px;
+
+            background: var(--surface-secondary);
+            color: var(--text);
+
+            border: 1px solid var(--border);
+            border-bottom-width: 2px;
+            border-radius: 5px;
+
+            font-family:
+                "Segoe UI",
+                sans-serif;
+
+            font-size: 12px;
+            font-weight: 600;
+            text-align: center;
+        }
+
+
+        /* =========================================================
+           FOOTER
+           ========================================================= */
+
+        footer {
+            margin-top: 64px;
+            padding-top: 24px;
+
+            border-top: 1px solid var(--border);
+
+            color: var(--text-muted);
+
+            font-size: 13px;
+            text-align: center;
+        }
+
+
+        /* =========================================================
+           MOBILE
+           ========================================================= */
+
+        @media (max-width: 900px) {
+            .layout {
+                display: block;
+            }
+
+            .sidebar {
+                position: static;
+                width: 100%;
+                height: auto;
+
+                border-right: none;
+                border-bottom: 1px solid var(--border);
+            }
+
+            .sidebar nav {
+                display: none;
+            }
+
+            .sidebar-footer {
+                margin-top: 0;
+                padding-top: 0;
+                border-top: none;
+            }
+
+            .content {
+                padding: 34px 22px 60px;
+            }
+
+            .brand {
+                margin-bottom: 14px;
+            }
+
+            section {
+                margin-top: 40px;
+            }
+        }
+
+        @media (max-width: 520px) {
+            .grid {
+                grid-template-columns: 1fr;
+            }
+
+            h1 {
+                font-size: 34px;
+            }
+
+            .hero-description {
+                font-size: 16px;
+            }
+        }
+    </style>
+</head>
+
+
+<body>
+
+<div class="layout">
+
+    <!-- =========================================================
+         SIDEBAR
+         ========================================================= -->
+
+    <aside class="sidebar">
+
+        <div class="brand">
+
+            <img
+                class="brand-icon"
+                src="../Images/database.png"
+                alt=""
+                onerror="this.style.display='none'"
+            >
+
+            <div>
+                <div class="brand-title">
+                    File System Viewer
+                </div>
+
+                <div class="brand-subtitle">
+                    User Manual
+                </div>
+            </div>
+
         </div>
-            
-        <div id="functions">
-            <h3><b>Functions:</b></h3>
-            <p>
-                <b>Gather Data (Ctrl + G):</b> Gather Data from the directory specified<br>
-                <b>Update Data (Ctrl + U):</b> Re-gather data from the current directory<br>
-                <b>Import Data (Ctrl + I):</b> Import data from an external .csv file<br>
-                <b>Plot Data (Ctrl + P):</b> Plot (Histogram) the loaded data<br>
-                <b>Export As...:</b> Export data as .csv/.txt/.xlsx file<br>
-                <b>Sorting:</b> Clicking on the respective data button sorts the data displayed<br>
+
+
+        <nav>
+            <div class="nav-title">Manual</div>
+
+            <a class="nav-link" href="#overview">
+                Overview
+            </a>
+
+            <a class="nav-link" href="#interface">
+                Interface
+            </a>
+
+            <a class="nav-link" href="#gathering">
+                Gathering Data
+            </a>
+
+            <a class="nav-link" href="#search">
+                Searching & Filtering
+            </a>
+
+            <a class="nav-link" href="#sorting">
+                Sorting & Pagination
+            </a>
+
+            <a class="nav-link" href="#files">
+                Opening Files
+            </a>
+
+            <a class="nav-link" href="#plotting">
+                Plots & Analysis
+            </a>
+
+            <a class="nav-link" href="#export">
+                Export & Import
+            </a>
+
+            <a class="nav-link" href="#shortcuts">
+                Keyboard Shortcuts
+            </a>
+
+            <a class="nav-link" href="#requirements">
+                Requirements
+            </a>
+
+            <a class="nav-link" href="#troubleshooting">
+                Troubleshooting
+            </a>
+        </nav>
+
+
+        <div class="sidebar-footer">
+
+            <button
+                id="themeButton"
+                class="button theme-button"
+                type="button"
+                onclick="toggleTheme()"
+            >
+                Dark mode
+            </button>
+
+        </div>
+
+    </aside>
+
+
+    <!-- =========================================================
+         MAIN CONTENT
+         ========================================================= -->
+
+    <main class="content">
+
+        <header class="hero">
+
+            <div class="eyebrow">
+                Documentation
+            </div>
+
+            <h1>
+                File System Viewer
+            </h1>
+
+            <p class="hero-description">
+                File System Viewer scans a directory, records its folders
+                and files, displays file paths and sizes, and provides tools
+                for searching, filtering, paging, sorting, analysing,
+                exporting and restoring the collected data.
             </p>
-        </div>
 
-        <div id="searching">
-                
-            <h3><b>Searching:</b></h3>
+        </header>
 
-            <table id="search-table">
-                <tr>
-                    <th><b>Operators</b></th>
-                    <th><b>Info</b></th>
-                </tr>
-            
-                <tr>
-                <td> => > < <=<i>key</i></td>
-                <td>eg. <=20mb</td>
-                </tr>
-            
-                <tr>
-                    <th colspan="2"><b>RegEx</b></th>
-                </tr>
-            
-                <tr>
-                <td>^<i>key</i></td>
-                <td>Starts with key</td>
-                </tr>
-            
-                <tr>
-                    <td><i>key</i>$</td>
-                    <td>Ends with key</td>
-                </tr>
-            
-                <tr>
-                    <td>%<i>key</i>%</td>
-                    <td>Case insensitive search</td>
-                </tr>
-            
-                <tr>
-                    <td>!<i>key</i></td>
-                    <td>Not in name</td>
-                </tr>
-                        
-                <tr>
-                    <td><i>key</i> && <i>key</i> && ...</td>
-                    <td>Multiple search keys</td>
-                </tr>
-            
-            </table>
-        </div>
 
-        <p>
-            <b>Double clicking</b> on a row, opens the parent directory of the file clicked.
-        </p>
-        
+        <!-- =====================================================
+             OVERVIEW
+             ===================================================== -->
+
+        <section id="overview">
+
+            <h2>Overview</h2>
+
+            <p class="section-intro">
+                The application is designed to provide a fast overview
+                of large directory trees without having to browse every
+                folder manually.
+            </p>
+
+            <div class="grid">
+
+                <div class="card">
+                    <span class="card-label">Scan</span>
+                    <h3>Inspect directories</h3>
+                    <p>
+                        Recursively scans a selected directory, counts
+                        accessible folders and records file paths and sizes.
+                    </p>
+                </div>
+
+                <div class="card">
+                    <span class="card-label">Search</span>
+                    <h3>Filter large datasets</h3>
+                    <p>
+                        Search by text, extension and file size using either
+                        the advanced query bar or the visual Filter Builder.
+                    </p>
+                </div>
+
+                <div class="card">
+                    <span class="card-label">Analyse</span>
+                    <h3>Sort and visualise</h3>
+                    <p>
+                        Sort and page through results, inspect file-size
+                        distribution and identify file types consuming the
+                        most storage.
+                    </p>
+                </div>
+
+                <div class="card">
+                    <span class="card-label">Persist</span>
+                    <h3>Store and restore results</h3>
+                    <p>
+                        The latest scan is stored in local MongoDB and a
+                        portable CSV Snapshot can be exported and imported
+                        without MongoDB Database Tools.
+                    </p>
+                </div>
+
+            </div>
+
+        </section>
+
+
+        <!-- =====================================================
+             INTERFACE
+             ===================================================== -->
+
+        <section id="interface">
+
+            <h2>Interface</h2>
+
+            <p class="section-intro">
+                The main window displays the currently loaded directory,
+                scan metadata, search and filter controls, paged file
+                results and analysis tools.
+            </p>
+
+            <ul class="feature-list">
+
+                <li>
+                    <strong>Scan Date</strong> shows when the current
+                    directory data was collected.
+                </li>
+
+                <li>
+                    <strong>Folders / Files</strong> shows the total number
+                    of accessible folders visited during the scan above the
+                    total number of files found.
+                </li>
+
+                <li>
+                    <strong>Total Size</strong> shows the combined size
+                    of all scanned files.
+                </li>
+
+                <li>
+                    <strong>Timings</strong> breaks the operation into
+                    <strong>Scan</strong>, <strong>Process</strong>,
+                    <strong>DB save</strong> and <strong>Total</strong>
+                    durations so slow stages can be identified.
+                </li>
+
+                <li>
+                    The main table displays each file's
+                    <strong>Size</strong> and <strong>Path</strong>.
+                </li>
+
+                <li>
+                    Pagination controls below the table let you move through
+                    large result sets without loading every visible row at
+                    once.
+                </li>
+
+                <li>
+                    The application opens maximized by default and supports
+                    both <strong>Light</strong> and <strong>Dark</strong>
+                    themes.
+                </li>
+
+            </ul>
+
+            <div class="note">
+                <strong>Path notation</strong>
+                The <code>~</code> character represents the root
+                directory that was scanned. This keeps long paths
+                easier to read.
+            </div>
+
+            <div class="note">
+                <strong>Folder counts from older saved scans</strong>
+                Older MongoDB data created before folder counting was added
+                may not contain a folder total. Run
+                <strong>Gather Data</strong> or <strong>Update Data</strong>
+                once to populate it.
+            </div>
+
+        </section>
+
+
+        <!-- =====================================================
+             GATHER DATA
+             ===================================================== -->
+
+        <section id="gathering">
+
+            <h2>Gathering Data</h2>
+
+            <h3>Gather Data</h3>
+
+            <p>
+                Select <strong>File → Gather Data…</strong> or press
+                <kbd>Ctrl</kbd> + <kbd>G</kbd>.
+            </p>
+
+            <p>
+                Choose a directory. File System Viewer recursively scans
+                that directory and its accessible subdirectories, counting
+                folders and collecting each file's path and size.
+            </p>
+
+            <p>
+                The scan runs in a background worker so the interface
+                remains responsive while large directory trees are being
+                processed.
+            </p>
+
+            <h3>Update Data</h3>
+
+            <p>
+                Select <strong>File → Update Data</strong> or press
+                <kbd>Ctrl</kbd> + <kbd>U</kbd> to scan the currently
+                loaded directory again.
+            </p>
+
+            <p>
+                Use this after files or folders have been added, deleted,
+                moved or resized.
+            </p>
+
+            <h3>Understanding Timings</h3>
+
+            <p>
+                The <strong>Timings</strong> card separates the operation
+                into four stages:
+            </p>
+
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                    <tr>
+                        <th>Stage</th>
+                        <th>What it measures</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <tr>
+                        <td><strong>Scan</strong></td>
+                        <td>
+                            Traversing folders, discovering files and reading
+                            file sizes from the filesystem.
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><strong>Process</strong></td>
+                        <td>
+                            Building and formatting the in-memory pandas
+                            dataset used by the application.
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><strong>DB save</strong></td>
+                        <td>
+                            Saving the newly collected snapshot to the local
+                            MongoDB database.
+                        </td>
+                    </tr>
+                    <tr>
+                        <td><strong>Total</strong></td>
+                        <td>
+                            End-to-end duration of the complete operation.
+                        </td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="warning">
+                <strong>What can make a scan slow?</strong>
+                Performance depends on the storage device, filesystem,
+                number of files and folders, cloud-synchronised or network
+                locations, and the time needed to persist the final snapshot
+                to MongoDB. The timing breakdown helps identify which stage
+                is responsible.
+            </div>
+
+        </section>
+
+
+        <!-- =====================================================
+             SEARCH
+             ===================================================== -->
+
+        <section id="search">
+
+            <h2>Searching & Filtering</h2>
+
+            <p class="section-intro">
+                File System Viewer provides two ways to filter the current
+                dataset: the advanced search bar and the visual
+                <strong>Filter Builder</strong>. Both use the same search
+                engine and can be combined with sorting, pagination and plots.
+            </p>
+
+            <h3>Advanced search syntax</h3>
+
+            <div class="table-wrapper">
+
+                <table>
+
+                    <thead>
+                    <tr>
+                        <th>Syntax</th>
+                        <th>Meaning</th>
+                        <th>Example</th>
+                    </tr>
+                    </thead>
+
+                    <tbody>
+
+                    <tr>
+                        <td><code>text</code></td>
+                        <td>Path contains the specified text.</td>
+                        <td><code>invoice</code></td>
+                    </tr>
+
+                    <tr>
+                        <td><code>%text%</code></td>
+                        <td>Case-insensitive path search.</td>
+                        <td><code>%invoice%</code></td>
+                    </tr>
+
+                    <tr>
+                        <td><code>^text</code></td>
+                        <td>Path starts with the specified text.</td>
+                        <td><code>^~\Documents</code></td>
+                    </tr>
+
+                    <tr>
+                        <td><code>text$</code></td>
+                        <td>Path ends with the specified text.</td>
+                        <td><code>.xlsx$</code></td>
+                    </tr>
+
+                    <tr>
+                        <td><code>!text</code></td>
+                        <td>Exclude paths containing the specified text.</td>
+                        <td><code>!backup</code></td>
+                    </tr>
+
+                    <tr>
+                        <td><code>ext:type</code></td>
+                        <td>
+                            Match exact file extension, case-insensitively.
+                            Multiple extensions can be comma-separated.
+                        </td>
+                        <td><code>ext:pdf,xlsx,docx</code></td>
+                    </tr>
+
+                    <tr>
+                        <td><code>&gt;size</code></td>
+                        <td>Files larger than the specified size.</td>
+                        <td><code>&gt;100mb</code></td>
+                    </tr>
+
+                    <tr>
+                        <td><code>&gt;=size</code></td>
+                        <td>Files greater than or equal to the size.</td>
+                        <td><code>&gt;=1gb</code></td>
+                    </tr>
+
+                    <tr>
+                        <td><code>&lt;size</code></td>
+                        <td>Files smaller than the specified size.</td>
+                        <td><code>&lt;500mb</code></td>
+                    </tr>
+
+                    <tr>
+                        <td><code>&lt;=size</code></td>
+                        <td>Files smaller than or equal to the size.</td>
+                        <td><code>&lt;=20mb</code></td>
+                    </tr>
+
+                    <tr>
+                        <td><code>condition && condition</code></td>
+                        <td>Combine multiple search conditions.</td>
+                        <td><code>ext:pdf && &gt;10mb</code></td>
+                    </tr>
+
+                    </tbody>
+
+                </table>
+
+            </div>
+
+            <h3>Visual Filter Builder</h3>
+
+            <p>
+                Click <strong>Filters ▾</strong> beside the search controls
+                to open the visual Filter Builder. It lets you create the
+                same advanced queries without typing the syntax manually.
+            </p>
+
+            <ul class="feature-list">
+                <li>
+                    <strong>Text</strong> supports Contains, case-insensitive
+                    Contains, Starts with, Ends with and Excludes.
+                </li>
+                <li>
+                    <strong>Extension</strong> accepts one or more
+                    comma-separated extensions such as
+                    <code>pdf, xlsx, docx</code>.
+                </li>
+                <li>
+                    <strong>Minimum size</strong> and
+                    <strong>Maximum size</strong> support Bytes, KB, MB,
+                    GB and TB.
+                </li>
+                <li>
+                    <strong>Apply Filters</strong> compiles the selected
+                    controls into the advanced query bar and runs the search.
+                </li>
+                <li>
+                    <strong>Reset</strong> clears both the Filter Builder and
+                    the active query.
+                </li>
+            </ul>
+
+            <div class="example">
+                <div class="example-title">
+                    Example generated by the Filter Builder
+                </div>
+                <span class="query">
+                    %invoice% && ext:pdf,xlsx && &gt;=1mb && &lt;=50mb
+                </span>
+            </div>
+
+            <h3>Size units</h3>
+
+            <p>
+                File sizes can be written using
+                <code>b</code>, <code>kb</code>, <code>mb</code>,
+                <code>gb</code> or <code>tb</code>.
+            </p>
+
+            <h3>Search examples</h3>
+
+            <div class="example">
+                <div class="example-title">
+                    PDF files smaller than 500 MB
+                </div>
+                <span class="query">ext:pdf && &lt;500mb</span>
+            </div>
+
+            <div class="example">
+                <div class="example-title">
+                    Files containing "invoice", regardless of case
+                </div>
+                <span class="query">%invoice%</span>
+            </div>
+
+            <div class="example">
+                <div class="example-title">
+                    Large files excluding backups
+                </div>
+                <span class="query">&gt;1gb && !backup</span>
+            </div>
+
+            <div class="example">
+                <div class="example-title">
+                    Excel files between 5 MB and 100 MB
+                </div>
+                <span class="query">
+                    ext:xlsx && &gt;=5mb && &lt;=100mb
+                </span>
+            </div>
+
+            <div class="note">
+                <strong>Multiple filters</strong>
+                Conditions separated by <code> && </code> are applied
+                sequentially. A file must satisfy all conditions to remain
+                in the result set.
+            </div>
+
+            <p>
+                Press <kbd>Ctrl</kbd> + <kbd>F</kbd> to move focus
+                directly to the search bar.
+            </p>
+
+            <p>
+                Press <kbd>Esc</kbd> to clear the active search and return
+                to the complete dataset.
+            </p>
+
+        </section>
+
+
+        <!-- =====================================================
+             SORTING
+             ===================================================== -->
+
+        <section id="sorting">
+
+            <h2>Sorting & Pagination</h2>
+
+            <p>
+                Click the <strong>Size</strong> or <strong>Path</strong>
+                column header to sort the current results. Clicking the same
+                column again reverses the sort order.
+            </p>
+
+            <p>
+                Sorting applies to the current filtered result set and resets
+                the view to page 1.
+            </p>
+
+            <h3>Rows per Page</h3>
+
+            <p>
+                Use <strong>View → Rows per Page</strong> to select
+                <strong>250</strong>, <strong>500</strong>,
+                <strong>1,000</strong>, <strong>2,000</strong> or
+                <strong>All rows</strong>.
+            </p>
+
+            <p>
+                When a page size is active, the controls below the table
+                provide <strong>First</strong>, <strong>Previous</strong>,
+                <strong>Next</strong> and <strong>Last</strong> navigation,
+                together with the current page number and visible row range.
+            </p>
+
+            <div class="example">
+                <div class="example-title">Example</div>
+                <span class="query">
+                    Page 2 of 13 · 1,001–2,000 of 12,341
+                </span>
+            </div>
+
+            <div class="note">
+                <strong>Pagination follows the active result set.</strong>
+                A new search, Filter Builder change, sort, scan or imported
+                snapshot resets the view to page 1.
+            </div>
+
+        </section>
+
+
+        <!-- =====================================================
+             OPEN FILE LOCATION
+             ===================================================== -->
+
+        <section id="files">
+
+            <h2>Opening File Locations</h2>
+
+            <p>
+                <strong>Double-click any row</strong> in the file table
+                to open that file's parent directory using the
+                operating system's file manager.
+            </p>
+
+            <div class="note">
+                <strong>The file itself is not opened.</strong>
+                File System Viewer opens the directory containing the
+                selected file.
+            </div>
+
+        </section>
+
+
+        <!-- =====================================================
+             PLOTTING
+             ===================================================== -->
+
+        <section id="plotting">
+
+            <h2>Plots & Analysis</h2>
+
+            <p class="section-intro">
+                Plot commands are available manually from the
+                <strong>File</strong> menu. Plot shortcuts were intentionally
+                removed so more analysis views can be added later without
+                consuming keyboard combinations.
+            </p>
+
+            <div class="note">
+                <strong>Plots always use the current filtered results.</strong>
+                If no filter is active, the current result set is the complete
+                dataset. If a search or visual filter is active, only the
+                matching files are analysed.
+            </div>
+
+            <h3>Plot Size Distribution</h3>
+
+            <p>
+                Select <strong>File → Plot Size Distribution</strong>.
+            </p>
+
+            <p>
+                The chart groups the current result set into practical file
+                size ranges, making it easy to see whether the selection is
+                dominated by tiny files, medium-sized documents or large
+                media/archive files.
+            </p>
+
+            <p>
+                The redesigned chart follows the active application theme,
+                uses clearer labels and grid styling, and displays file counts
+                and proportions for the size buckets.
+            </p>
+
+            <h3>Plot File Types by Size</h3>
+
+            <p>
+                Select <strong>File → Plot File Types by Size</strong>.
+            </p>
+
+            <p>
+                This horizontal bar chart ranks file extensions by the
+                <strong>total storage space they consume</strong>. The
+                largest file types are shown individually and smaller
+                categories are grouped into <strong>Other</strong>.
+            </p>
+
+            <p>
+                The chart also provides file counts, helping distinguish
+                between a file type that consumes space because there are
+                thousands of files and one that consumes space because each
+                file is individually large.
+            </p>
+
+            <div class="example">
+                <div class="example-title">Useful workflow</div>
+                <p>
+                    Filter with <code>ext:pdf,xlsx && &gt;=1mb</code>,
+                    then open either plot to analyse only those matching
+                    files.
+                </p>
+            </div>
+
+        </section>
+
+
+        <!-- =====================================================
+             EXPORT / IMPORT
+             ===================================================== -->
+
+        <section id="export">
+
+            <h2>Export & Import</h2>
+
+            <h3>Export</h3>
+
+            <p>
+                Open <strong>File → Export As</strong> to choose where the
+                exported file should be saved.
+            </p>
+
+            <div class="table-wrapper">
+
+                <table>
+
+                    <thead>
+                    <tr>
+                        <th>Format</th>
+                        <th>Purpose</th>
+                    </tr>
+                    </thead>
+
+                    <tbody>
+
+                    <tr>
+                        <td><strong>CSV Snapshot (Backup)</strong></td>
+                        <td>
+                            Creates a complete, importable backup containing
+                            the full dataset and File System Viewer metadata,
+                            including folder/file totals and available timing
+                            information.
+                        </td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>Excel (.xlsx)</strong></td>
+                        <td>
+                            Exports the complete scanned dataset to an Excel
+                            workbook.
+                        </td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>HTML (.html)</strong></td>
+                        <td>
+                            Creates a polished standalone report for the
+                            current matching results, with summary cards,
+                            Light/Dark mode and built-in row filtering.
+                        </td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>CSV (.csv)</strong></td>
+                        <td>
+                            Exports the current matching results to a
+                            semicolon-separated CSV file. This is a normal
+                            data export, not an importable backup snapshot.
+                        </td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>JSON (.json)</strong></td>
+                        <td>
+                            Exports the current matching results as JSON.
+                        </td>
+                    </tr>
+
+                    <tr>
+                        <td><strong>Text (.txt)</strong></td>
+                        <td>
+                            Creates a human-readable text listing of the
+                            complete scanned dataset.
+                        </td>
+                    </tr>
+
+                    </tbody>
+
+                </table>
+
+            </div>
+
+            <p>
+                The application's <code>Exports</code> directory is used as
+                the default location, but the final destination can be chosen
+                in the Save As dialog.
+            </p>
+
+            <h3>Import CSV Snapshot</h3>
+
+            <p>
+                Select <strong>File → Import CSV Snapshot…</strong> or press
+                <kbd>Ctrl</kbd> + <kbd>I</kbd>.
+            </p>
+
+            <p>
+                Choose a file created with
+                <strong>CSV Snapshot (Backup)</strong>. File System Viewer
+                validates the snapshot, loads it into the current session and
+                then attempts to save it as the active MongoDB snapshot.
+            </p>
+
+            <div class="note">
+                <strong>Snapshot CSV vs normal CSV</strong>
+                Only <strong>CSV Snapshot (Backup)</strong> is designed for
+                import. The regular <strong>CSV File</strong> export is for
+                external analysis and cannot be restored as an application
+                backup.
+            </div>
+
+            <div class="warning">
+                <strong>Valid snapshot, database save failed</strong>
+                If the CSV Snapshot is valid but MongoDB is unavailable, the
+                imported data is still loaded for the current application
+                session. File System Viewer reports the database persistence
+                failure separately instead of incorrectly treating the CSV as
+                invalid.
+            </div>
+
+        </section>
+
+
+        <!-- =====================================================
+             SHORTCUTS
+             ===================================================== -->
+
+        <section id="shortcuts">
+
+            <h2>Keyboard Shortcuts</h2>
+
+            <div class="table-wrapper">
+
+                <table>
+
+                    <thead>
+                    <tr>
+                        <th>Shortcut</th>
+                        <th>Action</th>
+                    </tr>
+                    </thead>
+
+                    <tbody>
+
+                    <tr>
+                        <td><kbd>Ctrl</kbd> + <kbd>G</kbd></td>
+                        <td>Gather data from a directory</td>
+                    </tr>
+
+                    <tr>
+                        <td><kbd>Ctrl</kbd> + <kbd>U</kbd></td>
+                        <td>Update the currently loaded directory</td>
+                    </tr>
+
+                    <tr>
+                        <td><kbd>Ctrl</kbd> + <kbd>I</kbd></td>
+                        <td>Import a CSV Snapshot backup</td>
+                    </tr>
+
+                    <tr>
+                        <td><kbd>Ctrl</kbd> + <kbd>F</kbd></td>
+                        <td>Focus the search bar</td>
+                    </tr>
+
+                    <tr>
+                        <td><kbd>Esc</kbd></td>
+                        <td>Clear the current search and filters</td>
+                    </tr>
+
+                    <tr>
+                        <td>
+                            <kbd>Ctrl</kbd> +
+                            <kbd>Shift</kbd> +
+                            <kbd>D</kbd>
+                        </td>
+                        <td>Switch between Light and Dark mode</td>
+                    </tr>
+
+                    <tr>
+                        <td><kbd>Ctrl</kbd> + <kbd>Q</kbd></td>
+                        <td>Exit File System Viewer</td>
+                    </tr>
+
+                    </tbody>
+
+                </table>
+
+            </div>
+
+            <div class="note">
+                <strong>Plots do not have keyboard shortcuts.</strong>
+                Plot commands are intentionally opened manually from the
+                File menu so additional charts can be added later without
+                reserving more key combinations.
+            </div>
+
+        </section>
+
+
+        <!-- =====================================================
+             REQUIREMENTS
+             ===================================================== -->
+
+        <section id="requirements">
+
+            <h2>Requirements</h2>
+
+            <p>
+                When running File System Viewer directly from Python,
+                the application relies on several Python packages and a
+                local MongoDB server.
+            </p>
+
+            <div class="grid">
+
+                <div class="card">
+                    <span class="card-label">Interface</span>
+                    <h3>PyQt5</h3>
+                    <p>
+                        Provides the desktop graphical user interface.
+                    </p>
+                </div>
+
+                <div class="card">
+                    <span class="card-label">Data</span>
+                    <h3>pandas</h3>
+                    <p>
+                        Handles the in-memory file dataset, filtering,
+                        sorting, pagination sources and exports.
+                    </p>
+                </div>
+
+                <div class="card">
+                    <span class="card-label">Charts</span>
+                    <h3>matplotlib + NumPy</h3>
+                    <p>
+                        Generate the size-distribution and file-type storage
+                        analysis plots.
+                    </p>
+                </div>
+
+                <div class="card">
+                    <span class="card-label">Database</span>
+                    <h3>MongoDB + PyMongo</h3>
+                    <p>
+                        Stores the latest scan locally and reloads it when
+                        the application starts.
+                    </p>
+                </div>
+
+            </div>
+
+            <h3>MongoDB connection</h3>
+
+            <span class="query">
+                mongodb://127.0.0.1:27017
+            </span>
+
+            <p>
+                The application uses a local MongoDB database named
+                <code>fsv</code>.
+            </p>
+
+            <h3>Additional Python package for Excel export</h3>
+
+            <p>
+                <code>openpyxl</code> is required when exporting
+                <code>.xlsx</code> files from the Python source version.
+            </p>
+
+            <div class="note">
+                <strong>MongoDB Database Tools are not required.</strong>
+                Backup export/import no longer uses external MongoDB dump or
+                restore commands. Portable backups are handled through
+                File System Viewer CSV Snapshots instead.
+            </div>
+
+        </section>
+
+
+        <!-- =====================================================
+             TROUBLESHOOTING
+             ===================================================== -->
+
+        <section id="troubleshooting">
+
+            <h2>Troubleshooting</h2>
+
+            <h3>The application starts without previously saved data</h3>
+
+            <p>
+                Check that MongoDB is installed and running locally on
+                <code>127.0.0.1:27017</code>. If MongoDB is unavailable,
+                File System Viewer can still open, but previously saved scan
+                data cannot be loaded automatically.
+            </p>
+
+            <h3>A CSV Snapshot will not import</h3>
+
+            <p>
+                Make sure the selected file was created with
+                <strong>File → Export As → CSV Snapshot (Backup)</strong>.
+                A regular CSV export does not contain the snapshot signature
+                and metadata required for restoration.
+            </p>
+
+            <p>
+                When parsing fails, File System Viewer reports the actual
+                snapshot error instead of a generic import failure.
+            </p>
+
+            <h3>The CSV Snapshot imports but cannot be saved to MongoDB</h3>
+
+            <p>
+                The snapshot itself is valid and remains available in the
+                current session. Check that MongoDB is running locally on
+                <code>127.0.0.1:27017</code> before closing the application
+                if you want the imported dataset to persist for the next
+                launch.
+            </p>
+
+            <h3>Excel export fails</h3>
+
+            <p>
+                When running from Python, verify that
+                <code>openpyxl</code> is installed.
+            </p>
+
+            <h3>A directory operation takes a long time</h3>
+
+            <p>
+                Check the <strong>Timings</strong> card. A high
+                <strong>Scan</strong> time points toward filesystem,
+                storage, network or cloud-sync overhead. A high
+                <strong>DB save</strong> time points toward MongoDB
+                persistence. <strong>Process</strong> represents in-memory
+                DataFrame construction and formatting.
+            </p>
+
+            <h3>The folder count is unavailable</h3>
+
+            <p>
+                Older saved scans may predate folder counting. Run
+                <strong>Gather Data</strong> or <strong>Update Data</strong>
+                to generate a current folder total and save it with the
+                snapshot.
+            </p>
+
+            <h3>Plots contain fewer files than expected</h3>
+
+            <p>
+                Both plots intentionally analyse only the
+                <strong>current filtered result set</strong>. Clear the active
+                search/filter if you want to analyse the complete dataset.
+            </p>
+
+            <h3>Double-clicking a file does not open its directory</h3>
+
+            <p>
+                The original file or directory may have been moved or deleted
+                since the last scan. Use <strong>Update Data</strong> to
+                refresh the dataset.
+            </p>
+
+        </section>
+
+
+        <!-- =====================================================
+             FOOTER
+             ===================================================== -->
+
         <footer>
-            <a href="https://github.com/Nick-Bounatsos/file-system-viewer" title="GitHub Repository">Visit repository</a>
+
+            <p>
+                File System Viewer
+            </p>
+
+            <p>
+                <a
+                    href="https://github.com/Nick-Bounatsos/file-system-viewer"
+                    title="File System Viewer GitHub Repository"
+                >
+                    GitHub Repository
+                </a>
+            </p>
+
         </footer>
-    </body>
+
+    </main>
+
+</div>
+
+
+<script>
+    /* =============================================================
+       MANUAL LIGHT / DARK MODE
+       ============================================================= */
+
+    const root = document.documentElement;
+    const themeButton = document.getElementById("themeButton");
+
+    function getPreferredTheme() {
+        const savedTheme = localStorage.getItem("fsv-manual-theme");
+
+        if (savedTheme === "light" || savedTheme === "dark") {
+            return savedTheme;
+        }
+
+        if (
+            window.matchMedia &&
+            window.matchMedia("(prefers-color-scheme: dark)").matches
+        ) {
+            return "dark";
+        }
+
+        return "light";
+    }
+
+    function applyTheme(theme) {
+        root.setAttribute("data-theme", theme);
+
+        themeButton.textContent =
+            theme === "dark"
+                ? "Light mode"
+                : "Dark mode";
+    }
+
+    function toggleTheme() {
+        const currentTheme =
+            root.getAttribute("data-theme") || "light";
+
+        const newTheme =
+            currentTheme === "dark"
+                ? "light"
+                : "dark";
+
+        localStorage.setItem(
+            "fsv-manual-theme",
+            newTheme
+        );
+
+        applyTheme(newTheme);
+    }
+
+    applyTheme(getPreferredTheme());
+</script>
+
+</body>
 </html>
